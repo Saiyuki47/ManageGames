@@ -1,0 +1,55 @@
+﻿@{
+    ViewData["Title"] = "Wunschliste";
+}
+@model ManageGames.ViewModels.WishListModel;
+<link rel="stylesheet" runat="server" media="screen" href="~/css/Index_Stylesheet.css" />
+<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+<div class="">
+    <h1 class="display-4">Games</h1>
+
+    <form asp-controller="Home" asp-action="Index">
+    <p>
+        Title: <input type="text" id="searchbarid" name="searchString" />
+        <button type="submit">Filter</button>    
+    </p>
+    </form>
+
+    <table id="GameTable">
+        <tr>
+            <th>Id</th>
+            <th>Console</th>
+            <th>Gametitle</th>
+            <th>Games Count</th>
+            <th>Edit/Delete</th>
+        </tr>
+        @for (int i = 0; i< @Model.WishList.Count ; i++)
+        {
+            <tr>
+                <td>@Model.WishList[i].GameId</td>
+@*                <td>@Model.ConsoleList[Model.WishList[i].Console_from_Game-1].Console_Name</td>*@   
+                <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.WishList[i].Console_from_Game)).First().Console_Name</td>
+                <td>@Model.WishList[i].GameName</td>
+                <td>@Model.WishList[i].Anzah_von_Game</td>
+                <td>
+                    <div style="display: flex; justify-content: space-between;">
+                        <form asp-controller="Home" asp-action="EditGame" method="post">
+                            <input type="hidden" name="id" value=@Model.WishList[i].GameId />
+                            <button type="submit">Edit</button>
+                        </form>
+                        <form asp-controller="Home" asp-action="DeleteGame" method="post">
+                            <input type="hidden" name="id" value=@Model.WishList[i].GameId />
+                            <input type="hidden" name="is_wishList" value="true" />
+                            <button type="submit">Delete</button>
+                        </form>
+                    </div>
+                    
+                </td>
+            </tr>
+        }
+    </table>
+</div>
+<script>
+
+    
+</script>

@@ -1,0 +1,34 @@
+﻿fieldset {
+    width: max-content;
+    outline-style: solid;
+    outline-color: black;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 10px;
+}
+
+div, label, input{
+    margin: 2px;
+
+}
+body {
+    color: #006798;
+}
+
+
+input{
+    text-align:left;
+}
+.add_resetbutton {
+    text-align:center;
+}
+
+.textshit {
+    display: inline-block;
+    width: 100px;
+    text-align: left;
+    margin-right: 10px;
+}
+#gamename{
+    width:100%;
+}
