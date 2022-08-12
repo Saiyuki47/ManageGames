@@ -1,0 +1,13 @@
+﻿table,th,tr,td {
+    text-align: left;
+    margin: 10px;
+    padding:5px;
+    border: 1px solid;
+}
+button {
+    border: 1px solid;
+    margin-right:5px;
+}
+#searchbarid{
+
+}

@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ManageGames</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/ManageGames.styles.css" asp-append-version="true" />
+    <script src="~/js/site.js" language="javascript" type="text/javascript"></script>
+    <style rel="stylesheet" onload="loginFailed('@Html.Raw(ViewBag.FalscheAnmeldung)'); checkCookie('@Html.Raw(ViewBag.IsStartseite)');">
+        .LoginBox {
+        position: relative;
+        width: 310px;
+        height: 370px;
+        border-radius: 5px;
+        outline-style: solid;
+        outline-color: black;
+        background-color: #282b30;
+        padding: 65px 40px 20px 40px;
+        box-shadow: 10px 10px 20px rgba(255, 255, 255, 0.505), -10px -10px 20px rgba(255, 255, 255, 0.361);
+        color: #006798;
+
+        }
+
+        #LogInCaption {
+            text-align: center;
+            font-family: 'Roboto', sans-serif;
+            font-size: 30px;
+        }
+
+        .divAusenrum {
+            margin: 20px 0;
+            position: relative;
+        }
+
+        #LogInForm {
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: auto;
+            margin-bottom: auto;
+            width: 310px;
+            height: 370px;
+            display: none;
+        }
+
+        .divAusenrum input {
+            width: 100%;
+            height: 40px;
+            background: transparent;
+            outline: none;
+            border: none;
+            border-bottom: 0.4px solid rgb(255, 255, 255);
+            font-size: 17px;
+            padding-top: 20px;
+            color: white;
+        }
+
+        .divAusenrum label {
+            position: absolute;
+            left: 0;
+            bottom: 5px;
+            pointer-events: none;
+            transition: 0.6s;
+            font-size: 14px;
+        }
+
+        form input:focus + label,
+        input:valid ~ label {
+            bottom: 24px;
+            left: 2px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 13px;
+        }
+
+        .blurrEffect {
+            background-color: rgba(235, 235, 235, .3);
+            filter: blur(8px);
+            inset: 0%;
+            position: absolute;
+            z-index: -1;
+        }
+
+        #logInButton{
+            margin:5px;
+        }
+        .premiumButton{ }
+
+    </style>
+
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" id="HomeButton" asp-area="" asp-controller="Home" asp-action="Index">ManageGames</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="Index">Game List</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddGame">Add to Gamelist</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="CategoryList">Category List</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddCategory">Add Category</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="WishList">Wishlist</a>
+                        </li>
+                        <li class="nav-item">
+                            <div></div>
+                        </li>
+                        <li class="nav-item">
+                            <button id="logInButton" onclick="openLoginWindow()">Anmelden</button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    
+    <form id="LogInForm" method="post" asp-controller="Home" asp-action="LoginValidation">
+        <div class="LoginBox" >
+            <h1 id="LogInCaption">Log In </h1>
+            <div class="divAusenrum">
+              <input type="text" name="username" value="David" required/>
+              <label>Username</label>
+            </div>
+
+            <div class="divAusenrum">
+              <input type="password" name="password" value="Madistinkt" required/>
+              <label>Password</label>
+            </div>
+            <button type="submit">Login</button>
+            <button onclick="closeLoginWindow()">Cancel</button>
+            @*<input type="submit" value="Login" />
+            <input type="button" onclick="closeLoginWindow()" value="Cancel" />*@
+        </div>
+    </form>
+
+    <div class="container" id="containerToBlurr" >
+        <main role="main" style="width:100%;height:100%;" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2022 - ManageGames - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+
+
+</body>
+
+</html>
+
