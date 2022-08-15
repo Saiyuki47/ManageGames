@@ -1,0 +1,25 @@
+﻿div table, div th, div tr, div td {
+    text-align: left;
+    margin: 10px;
+    padding: 5px;
+    border: 1px solid;
+}
+div td:nth-child(5){
+    text-align:center;
+}
+
+form:only-of-type, div > table {
+    margin: 10px;
+}
+
+div {
+    overflow: auto;
+}
+
+.editDeleteDiv {
+    display: flex;
+}
+
+form:nth-last-child(2) {
+    margin-right: 5px;
+}

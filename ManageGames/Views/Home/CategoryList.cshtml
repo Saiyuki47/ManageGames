@@ -1,51 +1,52 @@
 ﻿@{
-    ViewData["Title"] = "Wunschliste";
+    ViewData["Title"] = "Categorylist";
 }
 @model ManageGames.ViewModels.CategoryListModel;
-<link rel="stylesheet" runat="server" media="screen" href="~/css/Index_Stylesheet.css" />
+<link rel="stylesheet" runat="server" media="screen" href="~/css/list.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+<script src="~/js/list.js" language="javascript" type="text/javascript"></script>
 
 
-<div class="">
-    <h1 class="display-4">Games</h1>
+<div>
+    <div>
+        <h2 class="display-4">@ViewData["Title"]</h2>
 
-    <form asp-controller="Home" asp-action="Index">
-    <p>
-        Title: <input type="text" id="searchbarid" name="searchString" />
-        <button type="submit">Filter</button>    
-    </p>
-    </form>
-
-    <table id="GameTable">
-        <tr>
-            <th>Id</th>
-            <th>Console</th>
-            <th>Edit/Delete</th>
-            
-        </tr>
-        @for (int i = 0; i< @Model.ConsoleList.Count ; i++)
-        {
-            <tr>
-                <td>@Model.ConsoleList[i].ConsoleId</td>
-@*                <td>@Model.ConsoleList[Model.WishList[i].Console_from_Game-1].Console_Name</td>*@   
-                <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Console_Name</td>
-                <td>
-                    <div style="display: flex; justify-content: space-between;">
-                        <form asp-controller="Home" asp-action="EditCategory" method="post">
-                                <input type="hidden" name="id" value=@Model.ConsoleList[i].ConsoleId />
-                                <button type="submit">Edit</button>
-                        </form>
-                        <form asp-controller="Home" asp-action="DeleteCategory" method="post">
-                                <input type="hidden" name="id" value=@Model.ConsoleList[i].ConsoleId />
-                                <button type="submit">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-        }
-    </table>
-</div>
-<script>
-
+        <form asp-controller="Home" asp-action="CategoryList" id="searchBarCategoryList">
+            <p>
+                <input placeholder="Title" type="text" name="searchString" />
+                <button type="submit">Search</button>    
+                <button type="button" onclick="resetButton('searchBarCategoryList');">Reset</button>
+            </p>
+        </form>
+    </div>
     
-</script>
+    <div>
+        <table>
+            <tr>
+                <th>Id</th>
+                <th>Console</th>
+                <th>Edit/Delete</th>
+            </tr>
+
+            @for (int i = 0; i< @Model.ConsoleList.Count ; i++)
+            {
+                <tr>
+                    <td>@Model.ConsoleList[i].ConsoleId</td>
+                    <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Console_Name</td>
+                    <td>
+                        <div class="editDeleteDiv">
+                            <form asp-controller="Home" asp-action="EditCategory" method="post">
+                                    <input type="hidden" name="id" value=@Model.ConsoleList[i].ConsoleId />
+                                    <button type="submit">Edit</button>
+                            </form>
+                            <form asp-controller="Home" asp-action="DeleteCategory" method="post">
+                                    <input type="hidden" name="id" value=@Model.ConsoleList[i].ConsoleId />
+                                    <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+    </table>
+    </div>
+</div>

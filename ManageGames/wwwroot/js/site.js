@@ -6,10 +6,12 @@ function openLoginWindow() {
     document.getElementById('LogInForm').style.display = 'block';
     document.getElementById('containerToBlurr').classList.add('blurrEffect');
 }
+
 function closeLoginWindow() {
     document.getElementById('LogInForm').style.display = 'none';
     document.getElementById('containerToBlurr').classList.remove('blurrEffect');
 }
+
 function loginFailed(falschmeldung) {
     if (falschmeldung === 'Failed') {
         alert('Anmeldung Falsch');
@@ -31,6 +33,7 @@ function checkCookie(isStartseite) {
 
             alert('Piss dich');
             document.getElementById('HomeButton').click();
+            
         }
     }
     else {
@@ -77,7 +80,64 @@ function removeCookie() {
     //}
 
 }
+
 function fillUserID(inputID)
 {
     document.getElementById(inputID).value =`${document.cookie}`.split(`${name}=`)[1].split('%2B')[0];
+}
+
+function checkMode()
+{
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    {
+        //alert("darkmode");
+        //dark mode
+        //document.body.style.backgroundColor = "#282b30";
+        //document.head.style.backgroundColor = "#282b30";
+        //document.body.style.color = "grey";
+        //document.getElementById("navbaryeah").style.backgroundColor = "#282b30";
+
+        //////////////////////////////////////////////////////////////////////////////////
+        //var css = 'html {-webkit-filter: invert(100%);' +
+        //    '-moz-filter: invert(100%);' +
+        //    '-o-filter: invert(100%);' +
+        //    '-ms-filter: invert(100%); }',
+
+        //    head = document.getElementsByTagName('head')[0],
+        //    style = document.createElement('style');
+
+        //// a hack, so you can "invert back" clicking the bookmarklet again
+        //if (!window.counter) { window.counter = 1; } else {
+        //    window.counter++;
+        //    if (window.counter % 2 == 0) { var css = 'html {-webkit-filter: invert(0%); -moz-filter:    invert(0%); -o-filter: invert(0%); -ms-filter: invert(0%); }' }
+        //};
+
+        //style.type = 'text/css';
+        //if (style.styleSheet) {
+        //    style.styleSheet.cssText = css;
+        //} else {
+        //    style.appendChild(document.createTextNode(css));
+        //}
+
+        ////injecting the css to the head
+        //head.appendChild(style);
+        //////////////////////////////////////////////////////////////////////////////////
+
+
+        //var all = document.getElementsByTagName("*");
+        //for (var i = 0, max = all.length; i < max; i++) {
+        //    // Do something with the element here
+        //    if(all[i].tagName == "BUTTON")
+        //    {
+        //        all[i].style.cssText = 'color: green !important';
+
+        //    }
+           
+        //}
+    }
+    else
+    {
+
+
+    }
 }

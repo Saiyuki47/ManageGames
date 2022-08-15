@@ -7,28 +7,28 @@
     padding: 10px;
 }
 
-div, label, input{
+div, label, input {
     margin: 2px;
-
-}
-body {
-    color: #006798;
 }
 
-
-input{
-    text-align:left;
+input {
+    text-align: left;
+    width:auto;
 }
-.add_resetbutton {
-    text-align:center;
+.editResetDiv {
+    display: flex;
+    justify-content:right;
 }
 
-.textshit {
+label {
     display: inline-block;
     width: 100px;
     text-align: left;
     margin-right: 10px;
+    overflow-inline: hidden;
 }
-#gamename{
-    width:100%;
+
+button:first-child{
+    margin-right:5px;
 }
+

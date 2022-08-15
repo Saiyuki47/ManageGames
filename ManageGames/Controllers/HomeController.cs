@@ -15,27 +15,6 @@ namespace ManageGames.Controllers
 
         }
 
-        //private void RenewCookie()
-        //{
-        //    try
-        //    {
-        //        bool? fuck = HttpContext.Request.Cookies.ContainsKey("GameSort+");
-        //        if (fuck != null && HttpContext.Request.Cookies.Count >= 0)
-        //        {
-        //            string cookieValue = HttpContext.Request.Cookies.Where(x => x.Key.Equals("GameSort+")).First().Value.Split("+")[0]
-        //                + "+" +
-        //                HttpContext.Request.Cookies.Where(x => x.Key.Equals("GameSort+")).First().Value.Split("+")[1];
-        //            CookieOptions cookieOptions = new CookieOptions();
-        //            //Cookie Ablaufdatum/Uhrzeit festlegen
-        //            cookieOptions.Expires = new DateTimeOffset(DateTime.Now.AddSeconds(600));
-        //            HttpContext.Response.Cookies.Delete("GameSort+");
-        //            HttpContext.Response.Cookies.Append("GameSort+", cookieValue, cookieOptions);
-
-        //        }
-        //    }catch(Exception e)
-        //    { }
-        //}
-
         public IActionResult Index(string searchString, bool logInFailed = false)
         {
             
@@ -129,10 +108,19 @@ namespace ManageGames.Controllers
             new DataBase_Service().UpdateCategory(category_id, categoryName);
             return RedirectToAction("CategoryList");
         }
-        public IActionResult CategoryList()
+        public IActionResult CategoryList(string searchString)
         {
+            CategoryListModel categorylist = new CategoryListModel()
+            {
+                ConsoleList = new DataBase_Service().GetCategoryList()
+            };
 
-            return View("CategoryList", new CategoryListModel() { ConsoleList = new DataBase_Service().GetCategoryList() });
+            if (!String.IsNullOrEmpty(searchString))
+            {
+                categorylist.ConsoleList = categorylist.ConsoleList.Where(x => x.Console_Name.ToLower().Replace(" ", string.Empty).Contains(searchString.ToLower().Replace(" ", string.Empty))).ToList();
+            }
+
+            return View("CategoryList", categorylist);
         }
         [HttpPost]
         public IActionResult DeleteCategory(int id)
