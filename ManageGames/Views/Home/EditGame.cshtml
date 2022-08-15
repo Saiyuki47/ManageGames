@@ -1,29 +1,26 @@
 ﻿@{
     ViewData["Title"] = "Edit Game";
-
-
 }
-<h1>@ViewData["Title"]</h1>
-<link rel="stylesheet" runat="server" media="screen" href="~/css/EditGame_StyleSheet.css" />
+
+<link rel="stylesheet" runat="server" media="screen" href="~/css/AddEditGames.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 
 @model ManageGames.ViewModels.EditGameModel;
 
-<div class="">
-    @*asp-action und controller reinpacken*@
-    <form asp-controller=Home asp-action=SaveEditedGame method="post">
+<div>
+    <form asp-controller="Home" asp-action="SaveEditedGame" method="post">
         <fieldset>
             <legend>@ViewData["Title"]</legend>
-            <div style="">
-                <div style="">
-                    <label class="textshit">Gamename:</label>
-                    <input type=text name="gameName" value="@(Model.Game.GameName)" id="gameName" required/>
-                    <input type="hidden" name="id" id="id" value="@Model.Game.GameId"/>
+            <div>
+                <div>
+                    <label>Gamename:</label>
+                    <input type=text name="gameName" value="@(Model.Game.GameName)" required/>
+                    <input type="hidden" name="id" value="@Model.Game.GameId"/>
                 </div>
 
                 <div>
-                    <label class="textshit" for="myConsole">Console:</label>
-                    <select name="consoles" id="consoles">
+                    <label>Console:</label>
+                    <select name="consoles">
                         @for(int i=0;i<Model.ConsoleList.Count;i++)
                         {
                             <option selected=@(Model.ConsoleList[i].ConsoleId.Equals(Model.Game.Console_from_Game)?true:false) 
@@ -33,24 +30,21 @@
                 </div>
         
                 <div>
-                    <label class="textshit" for="wishlist">Wishlist:</label>
-                    <input type="checkbox" name="wishlist" id="wishlist" 
-                    checked=@Model.Game.IsOnWishList
-                    value="true" />
+                    <label>Wishlist:</label>
+                    <input type="checkbox" name="wishlist" checked=@Model.Game.IsOnWishList value="true" />
                 </div>
 
                 <div>
-                    <label class="textshit" for="game_amount">Gamecount:</label>
-                    <input type="number" min=1 value=@Model.Game.Anzah_von_Game
-                    name="game_amount" id="game_amount" required/>
+                    <label>Gamecount:</label>
+                    <input type="number" min=1 value=@Model.Game.Anzah_von_Game name="game_amount" required/>
                 </div>
 
-                <div style="text-align:right;">
-                    <input class="add_resetbutton" type="submit" value="Save"/>
+                <div class="editResetDiv">
+                    <button onclick="event.preventDefault(); location.reload()">Reset</button>
+                    <button type="submit">Save</button>
                 </div>
 
             </div>
-
 
         </fieldset>
     </form>

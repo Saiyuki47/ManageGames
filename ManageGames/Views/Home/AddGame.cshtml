@@ -1,27 +1,27 @@
 ﻿@{
     ViewData["Title"] = "Add a Game";
-
 }
-<h1>@ViewData["Title"]</h1>
-<link rel="stylesheet" runat="server" media="screen" href="~/css/AddGame_Stylesheet.css" />
+
+<link rel="stylesheet" runat="server" media="screen" href="~/css/AddEditGames.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 <script src="~/js/site.js" language="javascript" type="text/javascript"></script>
 <style onload="fillUserID('userID')"></style>
+
 @model ManageGames.ViewModels.AddGamesModel;
 
 <div>
     <form method="post">
         <fieldset>
             <legend>@ViewData["Title"]</legend>
-            <div style="">
-                <div style="">
-                    <label class="textshit">Gamename:</label>
-                    <input type=text name="gameName" id="gamename" required/>
+            <div>
+                <div>
+                    <label>Gamename:</label>
+                    <input type=text name="gameName" required/>
                 </div>
 
                 <div>
-                    <label class="textshit" for="myConsole">Console:</label>
-                    <select name="consoles" id="consoles" required>
+                    <label>Console:</label>
+                    <select name="consoles" required>
                         @for(int i=0;i<Model.ConsoleList.Count;i++)
                         {
                             <option selected=@(Model.ConsoleList[i].Console_Name.Equals("NoConsole")?true:false)
@@ -31,27 +31,24 @@
                 </div>
         
                 <div>
-                    <label class="textshit" for="wishlist">Wishlist:</label>
+                    <label>Wishlist:</label>
                     <input type="checkbox" name="wishlist" id="wishlist" value="true" />
                 </div>
 
                 <div>
+                    <label>Gamecount:</label>
+                    <input type="number" min=1 value=1 name="game_amount" required/>
                     <input name="userID" type="hidden" id="userID" value="" />
-                    <label class="textshit" for="game_amount">Gamescount:</label>
-                    <input type="number" min=1 value=1 name="game_amount" id="game_amount" required/>
                 </div>
 
-                <div style="text-align:right;">
-                    <button class="add_resetbutton" type="reset">Reset</button>
-                    <button class="add_resetbutton" type="submit">Add</button>
-                    @*<input class="add_resetbutton" type="reset" value="Reset"/>
-                    <input class="add_resetbutton" type="submit" value="Add"/>*@
+                <div class="editResetDiv">
+                    <button type="reset">Reset</button>
+                    <button type="submit">Add</button>
                 </div>
 
             </div>
 
-
         </fieldset>
     </form>
-    
+
 </div>
