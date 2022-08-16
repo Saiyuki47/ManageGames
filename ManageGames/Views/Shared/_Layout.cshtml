@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ManageGames.styles.css" asp-append-version="true" />
     <script src="~/js/site.js" language="javascript" type="text/javascript"></script>
-    <style rel="stylesheet" onload="    loginFailed('@Html.Raw(ViewBag.FalscheAnmeldung)'); checkCookie('@Html.Raw(ViewBag.IsStartseite)'); checkMode();"></style>
+    <style rel="stylesheet" onload="loginFailed('@Html.Raw(ViewBag.FalscheAnmeldung)'); checkCookie('@Html.Raw(ViewBag.IsStartseite)'); checkMode();"></style>
      
 </head>
 <body>
@@ -38,6 +38,9 @@
                             <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="WishList">Wishlist</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddUser">AddUser</a>
+                        </li>
+                        <li class="nav-item">
                             <div></div>
                         </li>
                         <li class="nav-item">
@@ -53,12 +56,12 @@
         <div class="LoginBox" >
             <h1 id="LogInCaption">Log In </h1>
             <div class="divAusenrum">
-              <input type="text" name="username" value="David" required/>
+              <input type="text" name="username" id="username" required/>
               <label>Username</label>
             </div>
 
             <div class="divAusenrum">
-              <input type="password" name="password" value="Madistinkt" required/>
+              <input type="password" name="password" id="password" required/>
               <label>Password</label>
             </div>
 

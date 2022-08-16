@@ -21,25 +21,45 @@ namespace ManageGames.Service
                 //File.Create(path);
                 sqlite = new SQLiteConnection("Data Source = " + path);
                 sqlite.Open();
-                List<string> list = new List<string>() { "NoConsole","GameCube", "Switch", "DS", "GBA", "N64", "WiiU", "Wii", "3DS", "PS2", "PS1","Gameboy", "Xbox 360"};
-                string console_table_query = "CREATE TABLE tblConsoles (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,ConsoleName VARCHAR);";
-                string games_table_query = "CREATE TABLE tblGames (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,Console INTEGER REFERENCES tblConsoles(ID),GameName VARCHAR,Anzahl_von_Game INTEGER,Wunschliste BOOLEAN);";
-                string fill_tblConsole = "";
-                for(int i = 1; i <= list.Count(); i++ )
+                //List<string> list = new List<string>() { "NoConsole","GameCube", "Switch", "DS", "GBA", "N64", "WiiU", "Wii", "3DS", "PS2", "PS1","Gameboy", "Xbox 360"};
+                List<string> console_list = new List<string>() { "NoConsole",
+                                                         "NES", "SNES", "N64", "Gamecube", "Wii", "WiiU", "Switch",
+                                                         "Gameboy", "Gameboy Advance", "DS", "3DS",
+                                                         "PS1", "PS2", "PS3","PS4", "PS4",
+                                                         "Xbox", "Xbox 360", "Xbox One", "Xbox Series"
+                                                       };
+                string fill_tblConsole      = "";
+                string console_table_query  = "CREATE TABLE tblConsoles (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,ConsoleName VARCHAR);";
+                string games_table_query    = "CREATE TABLE tblGames (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL," +
+                                                                  "Console INTEGER REFERENCES tblConsoles(ID)," +
+                                                                  "GameName VARCHAR," +
+                                                                  "Anzahl_von_Game INTEGER," +
+                                                                  "Wunschliste BOOLEAN," +
+                                                                  "UserID GUID REFERENCES tblUser (UserID));";
+                string user_table_query     = "CREATE TABLE tblUser (UserID GUID NOT NULL PRIMARY KEY," +
+                                                                "ProfilePicturesID GUID," +
+                                                                "Username VARCHAR(40)," +
+                                                                "Password VARCHAR(16)," +
+                                                                "IsAdmin BOOLEAN," +
+                                                                "CookieID VARCHAR(10)); ";
+                
+                for (int i = 1; i <= console_list.Count(); i++ )
                 {
-                    fill_tblConsole += "INSERT INTO tblConsoles(ID,ConsoleName) VALUES("+i+",'"+list[i-1].ToString()+"');";
+                    fill_tblConsole += "INSERT INTO tblConsoles(ID,ConsoleName) VALUES("+i+",'"+ console_list[i-1].ToString()+"');";
+                    //AddCategory(list[i]);
                 }
                                          
                 new SQLiteCommand(console_table_query, sqlite).ExecuteNonQuery();
                 new SQLiteCommand(fill_tblConsole, sqlite).ExecuteNonQuery();
+                new SQLiteCommand(user_table_query, sqlite).ExecuteNonQuery();
                 new SQLiteCommand(games_table_query, sqlite).ExecuteNonQuery();
                 sqlite.Close();
+                CreateUser("user", "password1", true);
             }
             else
             {
                 sqlite = new SQLiteConnection("Data Source = " + path);
             }
-
         }
 
         #region WriteToDB
@@ -65,7 +85,7 @@ namespace ManageGames.Service
             var command = sqlite.CreateCommand();
 
             command.CommandText =
-                "Insert into tblGames (Console , GameName, Anzahl_von_Game, Wunschliste, UserId  )" +
+                "Insert into tblGames (Console , GameName, Anzahl_von_Game, Wunschliste, UserID  )" +
                 "Values('" + console + "','" + gameName + "','" + game_amount + "','" + (wishlist==null? false : true) + "','"+ userID +" ')";
             command.ExecuteNonQuery();
 
@@ -298,7 +318,7 @@ namespace ManageGames.Service
             }
             sqlite.Close();
             
-            return consolemodel.OrderBy(x => x.Console_Name).ToList(); 
+            return consolemodel; 
         }
         public List<UserModel> GetUserList()
         {

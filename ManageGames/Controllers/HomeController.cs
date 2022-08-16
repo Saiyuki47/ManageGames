@@ -17,7 +17,7 @@ namespace ManageGames.Controllers
 
         public IActionResult Index(string searchString, bool logInFailed = false)
         {
-            
+
             if (logInFailed)
             {
                 ViewBag.FalscheAnmeldung = "Failed";
@@ -30,8 +30,19 @@ namespace ManageGames.Controllers
 
             if (HttpContext.Request.Cookies.ContainsKey("GameSort+"))
             {
-                string cookie = HttpContext.Request.Cookies.Where(x => x.Key.Equals("GameSort+")).First().Value.Split("+")[0];
-                indexModel.GamesList = indexModel.GamesList.Where(x => x.User.UserID.Equals(Guid.Parse(cookie))).ToList();
+                //Prueft, ob die CookieID mit der in der DB uebereinstimmt
+                if (CookieValidation())
+                {
+                    //Wenn "true" zurueckgegeben wird stimmen die ID's nicht ueberein und der Cookie wird geloescht da es einen neueren gibt
+                    HttpContext.Response.Cookies.Delete("GameSort+");
+                    //Nach dem loeschen --> zurueck zur statseite
+                    return RedirectToAction("Index");
+                }
+                else
+                {
+                    string cookie = HttpContext.Request.Cookies.Where(x => x.Key.Equals("GameSort+")).First().Value.Split("+")[0];
+                    indexModel.GamesList = indexModel.GamesList.Where(x => x.User.UserID.Equals(Guid.Parse(cookie))).ToList();
+                }
             }        
                  
             if (!String.IsNullOrEmpty(searchString))
@@ -138,10 +149,15 @@ namespace ManageGames.Controllers
         public IActionResult AddCategory(string categoryName)
         {
             new DataBase_Service().AddCategory(categoryName);
-            return RedirectToAction("Index");
+            return RedirectToAction("CategoryList");
         }
 
         #endregion
+
+        public IActionResult AddUser()
+        {
+            return View();
+        }
 
         [HttpPost]
         public IActionResult LoginValidation(string username, string password)
@@ -190,7 +206,26 @@ namespace ManageGames.Controllers
             }
 
         }
+        public string[] CookieInfoList()
+        {
+            string cookie = HttpContext.Request.Cookies["GameSort+"];
+            return cookie.Split("+");
+        }
+        public bool CookieValidation()
+        {
+            if (HttpContext.Request.Cookies.ContainsKey("GameSort+"))
+            {
+                List<UserModel> userList = new DataBase_Service().GetUserList(); ;
+                string[] cookieUserList = CookieInfoList();
+                //UserModel user = userList.Where(o => o.UserID.Equals(Guid.Parse(cookieUserList[0]))).Where(o => o.CookieID.Equals(cookieUserList[1])).First();
 
+                if (!userList.Any(x => x.UserID.Equals(Guid.Parse(cookieUserList[0])) && x.CookieID.Equals(cookieUserList[1])))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         public string TrimToLower(string word)
         {
             string tmp = word;

@@ -4,8 +4,7 @@
 
 <link rel="stylesheet" runat="server" media="screen" href="~/css/AddEditGames.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-<script src="~/js/site.js" language="javascript" type="text/javascript"></script>
-<style onload="fillUserID('userID')"></style>
+<script src="~/js/site.js" language="javascript" type="text/javascript" ></script>
 
 @model ManageGames.ViewModels.AddGamesModel;
 
@@ -16,7 +15,7 @@
             <div>
                 <div>
                     <label>Gamename:</label>
-                    <input type=text name="gameName" required/>
+                    <input type=text name="gameName" oninput="fillUserID('userID')" required/>
                 </div>
 
                 <div>
