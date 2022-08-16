@@ -2,7 +2,8 @@
 // for details on configuring this project to bundle and minify static web assets.
 
 // Write your JavaScript code.
-function openLoginWindow() {
+function openLoginWindow()
+{
     document.getElementById('LogInForm').style.display = 'block';
     document.getElementById('containerToBlurr').classList.add('blurrEffect');
 }
@@ -12,15 +13,24 @@ function closeLoginWindow() {
     document.getElementById('containerToBlurr').classList.remove('blurrEffect');
 }
 
-function loginFailed(falschmeldung) {
-    if (falschmeldung === 'Failed') {
+function loginFailed(falschmeldung)
+{
+    if (falschmeldung === 'Failed' && document.getElementById('username').value != null || document.getElementById('username').value != "" &&
+        document.getElementById('password').value != null || document.getElementById('password').value != "")
+    {
         alert('Anmeldung Falsch');
+        document.getElementById('HomeButton').click();
+        document.getElementById('username').removeAttribute('value');
+        document.getElementById('password').removeAttribute('value');
     }
-
-
 }
+
 var isLoggedIn;
-function checkCookie(isStartseite) {
+function checkCookie(isStartseite)
+{
+
+    //document.getElementById("categorySelect").select2();
+
     isLoggedIn = false;
     var cookieExsists;
 
@@ -41,7 +51,6 @@ function checkCookie(isStartseite) {
         isLoggedIn = true;
         setupPageForPremiumUser();
     }
-
 }
 
 function reNewCookie()
@@ -63,7 +72,8 @@ function setupPageForPremiumUser() {
     }
 }
 
-function removeCookie() {
+function removeCookie()
+{
     document.cookie = 'GameSort+=; Max-Age=0; path=/; domain=' + location.host;
     document.cookie = 'GameSort+=; Max-Age=0; path=/; domain=' + location.hostname;
     //alert('cookie deleted');
@@ -83,7 +93,7 @@ function removeCookie() {
 
 function fillUserID(inputID)
 {
-    document.getElementById(inputID).value =`${document.cookie}`.split(`${name}=`)[1].split('%2B')[0];
+    document.getElementById(inputID).value = `${document.cookie}`.split(`${name}=`)[1].split('%2B')[0];
 }
 
 function checkMode()
@@ -141,3 +151,4 @@ function checkMode()
 
     }
 }
+
