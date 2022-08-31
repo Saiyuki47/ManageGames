@@ -25,4 +25,4 @@
 
 - default user
 
--selber shit noch für Konsolen/Handhelds
+- selber shit noch für Konsolen/Handhelds
