@@ -26,3 +26,5 @@
 - default user
 
 - selber shit noch für Konsolen/Handhelds
+
+- Bilder von den Spielen (wirklich meine Spiele) um zu sehen wie die condition ist (mehrere Bilder möglich)
