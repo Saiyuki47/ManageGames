@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ManageGames.styles.css" asp-append-version="true" />
-    <script src="~/js/site.js" language="javascript" type="text/javascript"></script>
+    <script src="@string.Format("~/js/site.js?v={0}", DateTime.Now.Ticks)" language="javascript" type="text/javascript"></script>
     <style rel="stylesheet" onload="loginFailed('@Html.Raw(ViewBag.FalscheAnmeldung)'); checkCookie('@Html.Raw(ViewBag.IsStartseite)'); checkMode();"></style>
      
 </head>

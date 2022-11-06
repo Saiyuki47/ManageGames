@@ -24,3 +24,9 @@
  dropdown ist gleichzeitig eine searchbar für die Konsolen
 
  default user
+
+ bei add games die dropdownliste genauso lang wie inputs
+
+ zu jedem Game kann man eine Notiz hinzufügen
+
+ Bei Wishlist eine Priorität hinzufügen

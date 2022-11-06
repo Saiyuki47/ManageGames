@@ -4,5 +4,6 @@
     {
         public int ConsoleId { get; set; }
         public string Console_Name { get; set; }
+        public CompanyModel Company { get; set; }
     }
 }

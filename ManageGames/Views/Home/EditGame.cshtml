@@ -23,7 +23,7 @@
                     <select name="consoles">
                         @for(int i=0;i<Model.ConsoleList.Count;i++)
                         {
-                            <option selected=@(Model.ConsoleList[i].ConsoleId.Equals(Model.Game.Console_from_Game)?true:false) 
+                            <option selected=@(Model.ConsoleList[i].ConsoleId.Equals(Model.Game.Console)?true:false) 
                             value="@Model.ConsoleList[i].ConsoleId">@Model.ConsoleList[i].Console_Name</option>        
                         }
                     </select>

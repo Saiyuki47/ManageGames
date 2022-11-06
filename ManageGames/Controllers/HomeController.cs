@@ -24,7 +24,6 @@ namespace ManageGames.Controllers
             }
             IndexModel indexModel = new IndexModel()
             {
-                ConsoleList = new DataBase_Service().GetCategoryList(),
                 GamesList = new DataBase_Service().GetGameList().Where(x => x.IsOnWishList == false).ToList()
             };
 
@@ -54,9 +53,7 @@ namespace ManageGames.Controllers
         }
         public IActionResult WishList(string searchString)
         {
-            WishListModel wishlistmodel = new WishListModel() { WishList=new DataBase_Service().GetGameList().Where(x => x.IsOnWishList == true).ToList(),
-                                                                ConsoleList = new DataBase_Service().GetCategoryList()
-                                                              };
+            WishListModel wishlistmodel = new WishListModel() { WishList=new DataBase_Service().GetGameList().Where(x => x.IsOnWishList == true).ToList()};
             if (!String.IsNullOrEmpty(searchString))
             {
                 wishlistmodel.WishList = wishlistmodel.WishList.Where(x => x.GameName.ToLower().Replace(" ", string.Empty).Contains(searchString.ToLower().Replace(" ", string.Empty))).ToList();
