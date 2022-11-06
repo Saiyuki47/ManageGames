@@ -25,6 +25,7 @@
             <tr>
                 <th>Id</th>
                 <th>Console</th>
+                <th>Company from Console</th>
                 <th>Edit/Delete</th>
             </tr>
 
@@ -33,6 +34,7 @@
                 <tr>
                     <td>@Model.ConsoleList[i].ConsoleId</td>
                     <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Console_Name</td>
+                    <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Company.CompanyName</td>
                     <td>
                         <div class="editDeleteDiv">
                             <form asp-controller="Home" asp-action="EditCategory" method="post">

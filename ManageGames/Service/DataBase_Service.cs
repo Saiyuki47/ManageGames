@@ -16,41 +16,37 @@ namespace ManageGames.Service
             if(!File.Exists(path))
             {
                 if (!Directory.Exists(Directory.GetCurrentDirectory() + "\\DB")) Directory.CreateDirectory(Directory.GetCurrentDirectory() + "\\DB\\");
-
+                
                 SQLiteConnection.CreateFile(path);
                 //File.Create(path);
                 sqlite = new SQLiteConnection("Data Source = " + path);
                 sqlite.Open();
-                //List<string> list = new List<string>() { "NoConsole","GameCube", "Switch", "DS", "GBA", "N64", "WiiU", "Wii", "3DS", "PS2", "PS1","Gameboy", "Xbox 360"};
-                List<string> console_list = new List<string>() { "NoConsole",
-                                                         "NES", "SNES", "N64", "Gamecube", "Wii", "WiiU", "Switch",
-                                                         "Gameboy", "Gameboy Advance", "DS", "3DS",
-                                                         "PS1", "PS2", "PS3","PS4", "PS4",
-                                                         "Xbox", "Xbox 360", "Xbox One", "Xbox Series"
-                                                       };
-                string fill_tblConsole      = "";
-                string console_table_query  = "CREATE TABLE tblConsoles (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,ConsoleName VARCHAR);";
+
+                string console_table_query  = "CREATE TABLE tblConsoles (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL," +
+                                                                        "ConsoleName VARCHAR," +
+                                                                        "Company INTEGER REFERENCES tblCompanies (ID));";
                 string games_table_query    = "CREATE TABLE tblGames (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL," +
                                                                   "Console INTEGER REFERENCES tblConsoles(ID)," +
                                                                   "GameName VARCHAR," +
                                                                   "Anzahl_von_Game INTEGER," +
                                                                   "Wunschliste BOOLEAN," +
                                                                   "UserID GUID REFERENCES tblUser (UserID));";
+                
                 string user_table_query     = "CREATE TABLE tblUser (UserID GUID NOT NULL PRIMARY KEY," +
                                                                 "ProfilePicturesID GUID," +
                                                                 "Username VARCHAR(40)," +
                                                                 "Password VARCHAR(16)," +
                                                                 "IsAdmin BOOLEAN," +
                                                                 "CookieID VARCHAR(10)); ";
-                
-                for (int i = 1; i <= console_list.Count(); i++ )
-                {
-                    fill_tblConsole += "INSERT INTO tblConsoles(ID,ConsoleName) VALUES("+i+",'"+ console_list[i-1].ToString()+"');";
-                    //AddCategory(list[i]);
-                }
-                                         
+
+                string company_table_query = "CREATE TABLE tblCompanies (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL," +
+                                                                        "CompanyName VARCHAR);";
+
+
+                new SQLiteCommand(company_table_query, sqlite).ExecuteNonQuery();
+                new SQLiteCommand("INSERT INTO tblCompanies(ID,CompanyName) VALUES(" + 0 + ",'NoCompany');", sqlite).ExecuteNonQuery();
                 new SQLiteCommand(console_table_query, sqlite).ExecuteNonQuery();
-                new SQLiteCommand(fill_tblConsole, sqlite).ExecuteNonQuery();
+                new SQLiteCommand("INSERT INTO tblConsoles(ID,ConsoleName,Company) VALUES(" + 0 + ",'NoConsole', 0);", sqlite).ExecuteNonQuery();
                 new SQLiteCommand(user_table_query, sqlite).ExecuteNonQuery();
                 new SQLiteCommand(games_table_query, sqlite).ExecuteNonQuery();
                 sqlite.Close();
@@ -204,9 +200,38 @@ namespace ManageGames.Service
 
         #region ReadFromDB
 
+        public List<CompanyModel> GetCompanies()
+        {
+            List<CompanyModel> companies = new List<CompanyModel>();
+            sqlite.Open();
+
+            var command = sqlite.CreateCommand();
+            command.CommandText =
+                @"
+                SELECT *
+                FROM tblCompanies
+            ";
+
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    companies.Add(
+                        new CompanyModel
+                        {
+                           CompanyId    = reader.GetInt32(0),
+                           CompanyName  = reader.GetString(1) 
+                        }
+                    );
+                }
+            }
+            sqlite.Close();
+            return companies;
+        }
         public GameModel GetSingleGame(int ID)
         {
             GameModel Game = new GameModel();
+            List<ConsoleModel> consoleModels = GetCategoryList();
             sqlite.Open();
 
             var command = sqlite.CreateCommand();
@@ -222,7 +247,7 @@ namespace ManageGames.Service
                 {
 
                     Game.GameId = reader.GetInt32(0);
-                    Game.Console_from_Game = reader.GetInt32(1);
+                    Game.Console = consoleModels.Where(x => x.ConsoleId.Equals(reader.GetInt32(1))).First();
                     Game.GameName = reader.GetString(2);
                     Game.Anzah_von_Game = reader.GetInt32(3);
                     Game.IsOnWishList = Convert.ToBoolean(reader.GetString(4));
@@ -259,6 +284,7 @@ namespace ManageGames.Service
         {
             List<GameModel> GameList = new List<GameModel>();
             List<UserModel> userModels = GetUserList();
+            List<ConsoleModel> consoleModels = GetCategoryList();
             sqlite.Open();
 
             var command = sqlite.CreateCommand();
@@ -276,7 +302,7 @@ namespace ManageGames.Service
                         new GameModel
                         {
                             GameId = reader.GetInt32(0),
-                            Console_from_Game = reader.GetInt32(1),
+                            Console = consoleModels.Where(x=>x.ConsoleId.Equals(reader.GetInt32(1))).First(),
                             GameName = reader.GetString(2),
                             Anzah_von_Game = reader.GetInt32(3),
                             IsOnWishList = Convert.ToBoolean(reader.GetString(4)),
@@ -291,6 +317,7 @@ namespace ManageGames.Service
         public List<ConsoleModel> GetCategoryList()
         {
             List<ConsoleModel> consolemodel = new List<ConsoleModel>();
+            List<CompanyModel> companies    = GetCompanies();
             sqlite.Open();
 
 
@@ -310,9 +337,10 @@ namespace ManageGames.Service
                         new ConsoleModel
                         {
                             ConsoleId = reader.GetInt32(0),
-                            Console_Name = reader.GetString(1)
+                            Console_Name = reader.GetString(1),
+                            Company = companies.Where(x => x.CompanyId.Equals(reader.GetInt32(2))).First()
                         }
-                        );
+                        ); ;
 
                 }
             }

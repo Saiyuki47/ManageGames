@@ -35,7 +35,7 @@
                 <tr>
                     <td>@Model.GamesList[i].GameId</td>
                     <td>@Model.GamesList[i].User.Username</td>
-                    <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.GamesList[i].Console_from_Game)).First().Console_Name</td>
+                    <td>@Model.GamesList[i].Console.Console_Name</td>
                     <td>@Model.GamesList[i].GameName</td>
                     <td>@Model.GamesList[i].Anzah_von_Game</td>
                     <td>
