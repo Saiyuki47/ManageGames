@@ -27,11 +27,14 @@
 
 - selber shit noch für Konsolen/Handhelds
 
- default user
+- default user
 
- bei add games die dropdownliste genauso lang wie inputs
+- bei add games die dropdownliste genauso lang wie inputs
 
- zu jedem Game kann man eine Notiz hinzufügen
+- zu jedem Game kann man eine Notiz hinzufügen
 
- Bei Wishlist eine Priorität hinzufügen
+- Bei Wishlist eine Priorität hinzufügen
+ 
 - Bilder von den Spielen (wirklich meine Spiele) um zu sehen wie die condition ist (mehrere Bilder möglich)
+
+-Eine Anzeige, welche Zeigt, ob ein Backup des Spiels gemacht wurde.
