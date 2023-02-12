@@ -37,4 +37,6 @@
  
 - Bilder von den Spielen (wirklich meine Spiele) um zu sehen wie die condition ist (mehrere Bilder möglich)
 
--Eine Anzeige, welche Zeigt, ob ein Backup des Spiels gemacht wurde.
+- Eine Anzeige, welche Zeigt, ob ein Backup des Spiels gemacht wurde.
+
+- Vielleicht ein Tag für jedes Spiel bei dem man angibt, ob das Spiel eine Hülle hat oder nicht
