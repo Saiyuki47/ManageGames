@@ -91,11 +91,6 @@ function removeCookie()
 
 }
 
-function fillUserID(inputID)
-{
-    document.getElementById(inputID).value = `${document.cookie}`.split(`${name}=`)[1].split('%2B')[0];
-}
-
 function checkMode()
 {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
