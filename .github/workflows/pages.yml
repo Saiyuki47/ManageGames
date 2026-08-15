@@ -29,12 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pages must be enabled once under Settings > Pages (Source: GitHub Actions);
+      # the default workflow token is not allowed to create the site itself.
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          # Try to enable Pages (source = GitHub Actions) automatically on first run.
-          # If this lacks permission, enable it once under Settings > Pages instead.
-          enablement: true
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
