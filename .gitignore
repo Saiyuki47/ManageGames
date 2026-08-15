@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local SQLite database (runtime data, recreated on first start; may contain credentials)
+ManageGames/DB/*.db
+ManageGames/DB/*.db-shm
+ManageGames/DB/*.db-wal
