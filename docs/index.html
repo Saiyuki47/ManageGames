@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ManageGames — game collection manager</title>
+<meta name="description" content="ManageGames — a self-hosted ASP.NET Core app to organize your video game collection: games, consoles, companies and a wishlist, each behind your own account.">
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --text: #1a1d24;
+    --muted: #5b6472;
+    --border: #e4e7ec;
+    --accent: #6d5efc;
+    --accent-2: #b23bff;
+    --code-bg: #0f1117;
+    --code-text: #e6e6e6;
+    --shadow: 0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a22;
+      --text: #eef1f6;
+      --muted: #9aa4b2;
+      --border: #262c37;
+      --accent: #8b7dff;
+      --accent-2: #c86bff;
+      --code-bg: #0a0c11;
+      --code-text: #e6e6e6;
+      --shadow: 0 1px 3px rgba(0,0,0,.30);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  .hero {
+    text-align: center;
+    padding: 88px 24px 60px;
+    background: radial-gradient(1200px 420px at 50% -120px, rgba(140,110,255,.20), transparent 70%);
+  }
+  .badge-top {
+    display: inline-block; font-size: 13px; font-weight: 600;
+    color: var(--accent);
+    background: rgba(140,110,255,.12);
+    border: 1px solid rgba(140,110,255,.32);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(40px, 7vw, 64px); margin: 0 0 12px; letter-spacing: -.03em;
+    background: linear-gradient(120deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .lead { font-size: clamp(17px, 2.5vw, 21px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+  .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    font-weight: 600; padding: 12px 22px; border-radius: 10px; font-size: 15px;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn-primary { background: linear-gradient(120deg, var(--accent), var(--accent-2)); color: #fff; box-shadow: var(--shadow); }
+  .btn-primary:hover { transform: translateY(-1px); }
+  .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+  section { padding: 56px 0; }
+  h2 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 8px; text-align: center; }
+  .section-sub { text-align: center; color: var(--muted); margin: 0 auto 36px; max-width: 560px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; box-shadow: var(--shadow);
+  }
+  .card .ico { font-size: 26px; margin-bottom: 12px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .tech {
+    font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+  }
+
+  .run {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 8px; max-width: 680px; margin: 0 auto; box-shadow: var(--shadow); overflow: hidden;
+  }
+  pre {
+    margin: 0; background: var(--code-bg); color: var(--code-text); border-radius: 10px;
+    padding: 20px 22px; overflow-x: auto; font-size: 14px; line-height: 1.7;
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  }
+  pre .c { color: #7a8699; }
+  pre .p { color: #b48cff; }
+  .note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 18px; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0 48px; text-align: center; color: var(--muted); font-size: 14px; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <span class="badge-top">ASP.NET Core · .NET 10</span>
+      <h1>ManageGames</h1>
+      <p class="lead">A self-hosted web app to keep your video-game collection organized — games, consoles, makers and a wishlist, each behind your own account.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/Saiyuki47/ManageGames">★ View on GitHub</a>
+        <a class="btn btn-ghost" href="#run">Run it locally</a>
+      </div>
+    </div>
+  </header>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>What it does</h2>
+      <p class="section-sub">A small, focused collection manager — no clutter, just your library.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">🎮</div><h3>Your game library</h3><p>Add, edit and remove games, track how many copies you own, and search your collection.</p></div>
+        <div class="card"><div class="ico">🕹️</div><h3>Consoles &amp; makers</h3><p>Group games by console and link each console to the company that makes it.</p></div>
+        <div class="card"><div class="ico">⭐</div><h3>Wishlist</h3><p>Flag the games you still want and keep them on a separate wishlist.</p></div>
+        <div class="card"><div class="ico">🔒</div><h3>Personal accounts</h3><p>Log in and see only your own collection — data is scoped per user, server-side.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tech" style="padding-top: 0;">
+    <div class="wrap">
+      <h2>Built with</h2>
+      <p class="section-sub">A modern .NET stack with a clean, migration-driven data layer.</p>
+      <div class="badges">
+        <span class="tech">ASP.NET Core MVC</span>
+        <span class="tech">.NET 10</span>
+        <span class="tech">Entity Framework Core</span>
+        <span class="tech">SQLite</span>
+        <span class="tech">Cookie authentication</span>
+        <span class="tech">EF Core Migrations</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="run">
+    <div class="wrap">
+      <h2>Run it locally</h2>
+      <p class="section-sub">It's a server app with its own database, so it runs on your machine — not on this page.</p>
+      <div class="run">
+<pre><span class="c"># clone and start</span>
+<span class="p">git</span> clone https://github.com/Saiyuki47/ManageGames.git
+<span class="p">cd</span> ManageGames
+<span class="p">dotnet</span> run --project ManageGames
+
+<span class="c"># then open https://localhost:7200</span>
+<span class="c"># a default admin is seeded on first run: user / password1 (change it)</span></pre>
+      </div>
+      <p class="note">Requires the .NET 10 SDK. The database is created automatically on first start.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      ManageGames — a personal project by <a href="https://github.com/Saiyuki47">Saiyuki47</a> ·
+      <a href="https://github.com/Saiyuki47/ManageGames">Source on GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>
