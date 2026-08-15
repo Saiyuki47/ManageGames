@@ -3,16 +3,35 @@ using ManageGames.Service;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 using ManageGames.ViewModels;
+using ManageGames.Filters;
+using ManageGames.Helpers;
 
 namespace ManageGames.Controllers
 {
+    [AutoValidateAntiforgeryToken]
     public class HomeController : Controller
     {
-        private readonly ILogger<HomeController> _logger;
-        public HomeController(ILogger<HomeController> logger)
+        private readonly DataBase_Service _service;
+        public HomeController(DataBase_Service service)
         {
-            _logger = logger;
+            _service = service;
+        }
 
+        // The authenticated user's id, guaranteed present inside [RequireLogin] actions
+        // (RequireLoginAttribute validates the session cookie and stashes it here).
+        private Guid CurrentUserId => (Guid)HttpContext.Items[SessionCookie.UserIdItemKey]!;
+
+        // Robustly reads and validates the session cookie for the public Index page.
+        // Returns null when the cookie is absent, malformed, or no longer matches a user.
+        private Guid? GetValidatedUserId()
+        {
+            HttpContext.Request.Cookies.TryGetValue(SessionCookie.CookieName, out var cookie);
+            if (SessionCookie.TryParse(cookie, out var userId, out var cookieId)
+                && _service.IsValidSession(userId, cookieId))
+            {
+                return userId;
+            }
+            return null;
         }
 
         public IActionResult Index(string searchString, bool logInFailed = false)
@@ -22,42 +41,31 @@ namespace ManageGames.Controllers
             {
                 ViewBag.FalscheAnmeldung = "Failed";
             }
-            IndexModel indexModel = new IndexModel()
-            {
-                GamesList = new DataBase_Service().GetGameList().Where(x => x.IsOnWishList == false).ToList()
-            };
+            // Anonymous visitors see nothing (no cross-user data leak); a logged-in user sees
+            // only their own games.
+            IndexModel indexModel = new IndexModel() { GamesList = new List<GameModel>() };
 
-            if (HttpContext.Request.Cookies.ContainsKey("GameSort+"))
+            if (HttpContext.Request.Cookies.ContainsKey(SessionCookie.CookieName))
             {
-                //Prueft, ob die CookieID mit der in der DB uebereinstimmt
-                if (CookieValidation())
+                Guid? userId = GetValidatedUserId();
+                if (userId == null)
                 {
-                    //Wenn "true" zurueckgegeben wird stimmen die ID's nicht ueberein und der Cookie wird geloescht da es einen neueren gibt
-                    HttpContext.Response.Cookies.Delete("GameSort+");
-                    //Nach dem loeschen --> zurueck zur statseite
+                    // Stale or malformed cookie -> clear it and reload.
+                    HttpContext.Response.Cookies.Delete(SessionCookie.CookieName);
                     return RedirectToAction("Index");
                 }
-                else
-                {
-                    string cookie = HttpContext.Request.Cookies.Where(x => x.Key.Equals("GameSort+")).First().Value.Split("+")[0];
-                    indexModel.GamesList = indexModel.GamesList.Where(x => x.User.UserID.Equals(Guid.Parse(cookie))).ToList();
-                }
-            }        
-                 
-            if (!String.IsNullOrEmpty(searchString))
-            {
-                indexModel.GamesList = indexModel.GamesList.Where(x => x.GameName.ToLower().Replace(" ",string.Empty).Contains(searchString.ToLower().Replace(" ", string.Empty))).ToList();
+                indexModel.GamesList = _service.GetGamesForUser(userId.Value, onWishList: false);
             }
+
+            indexModel.GamesList = SearchFilter.Filter(indexModel.GamesList, searchString, x => x.GameName);
             ViewBag.IsStartseite = "Yes";
             return View("Index",indexModel);
         }
+        [RequireLogin]
         public IActionResult WishList(string searchString)
         {
-            WishListModel wishlistmodel = new WishListModel() { WishList=new DataBase_Service().GetGameList().Where(x => x.IsOnWishList == true).ToList()};
-            if (!String.IsNullOrEmpty(searchString))
-            {
-                wishlistmodel.WishList = wishlistmodel.WishList.Where(x => x.GameName.ToLower().Replace(" ", string.Empty).Contains(searchString.ToLower().Replace(" ", string.Empty))).ToList();
-            }
+            WishListModel wishlistmodel = new WishListModel() { WishList = _service.GetGamesForUser(CurrentUserId, onWishList: true) };
+            wishlistmodel.WishList = SearchFilter.Filter(wishlistmodel.WishList, searchString, x => x.GameName);
 
             return View("WishList", wishlistmodel);
         }
@@ -65,39 +73,45 @@ namespace ManageGames.Controllers
         #region Game
 
         [HttpPost]
+        [RequireLogin]
         public IActionResult DeleteGame(int id)
         {
-            new DataBase_Service().DeleteGame(id);
+            _service.DeleteGame(id, CurrentUserId);
             return RedirectToAction("Index");
         }
+        [RequireLogin]
         public IActionResult AddGame()
         {
 
             AddGamesModel addGamesModel = new AddGamesModel();
-            addGamesModel.ConsoleList = new DataBase_Service().GetCategoryList();/*.OrderBy(x => x.Console_Name).ToList();*/
+            addGamesModel.ConsoleList = _service.GetCategoryList();/*.OrderBy(x => x.ConsoleName).ToList();*/
 
             return View("AddGame", addGamesModel);
         }
         [HttpPost]
-        public IActionResult AddGame(string gameName, int game_amount, int consoles, string wishlist, string userID)
+        [RequireLogin]
+        public IActionResult AddGame(string gameName, int game_amount, int? consoles, string wishlist)
         {
-            new DataBase_Service().AddGame(gameName, game_amount, consoles, wishlist, userID);
+            // Owner comes from the authenticated session, never from request input.
+            _service.AddGame(gameName, game_amount, consoles, wishlist, CurrentUserId);
             return RedirectToAction("Index");
 
         }
         [HttpPost]
+        [RequireLogin]
         public IActionResult EditGame(int id)
         {
             EditGameModel editgamemodel = new EditGameModel();
-            editgamemodel.ConsoleList = new DataBase_Service().GetCategoryList();
-            editgamemodel.Game = new DataBase_Service().GetSingleGame(id);
+            editgamemodel.ConsoleList = _service.GetCategoryList();
+            editgamemodel.Game = _service.GetSingleGame(id, CurrentUserId);
 
             return View("EditGame", editgamemodel);
         }
         [HttpPost]
-        public IActionResult SaveEditedGame(string gameName, int game_amount, int consoles, string wishlist, int id)
+        [RequireLogin]
+        public IActionResult SaveEditedGame(string gameName, int game_amount, int? consoles, string wishlist, int id)
         {
-            new DataBase_Service().UpdateGame(gameName, game_amount, consoles, wishlist, id);
+            _service.UpdateGame(gameName, game_amount, consoles, wishlist, id, CurrentUserId);
             return RedirectToAction("Index");
         }
 
@@ -105,52 +119,110 @@ namespace ManageGames.Controllers
 
         #region Category
 
+        [RequireAdmin]
         public IActionResult EditCategory(int id)
         {
 
-            return View("EditCategory", new AddEditCategory() { Console = new DataBase_Service().GetSingleConsole(id) });
+            return View("EditCategory", new AddEditCategory()
+            {
+                Console = _service.GetSingleConsole(id),
+                CompanyList = _service.GetCompanyList()
+            });
         }
         [HttpPost]
-        public IActionResult SaveEditedCategory(int category_id, string categoryName)
+        [RequireAdmin]
+        public IActionResult SaveEditedCategory(int category_id, string categoryName, int? company)
         {
-            new DataBase_Service().UpdateCategory(category_id, categoryName);
+            _service.UpdateCategory(category_id, categoryName, company);
             return RedirectToAction("CategoryList");
         }
+        [RequireAdmin]
         public IActionResult CategoryList(string searchString)
         {
             CategoryListModel categorylist = new CategoryListModel()
             {
-                ConsoleList = new DataBase_Service().GetCategoryList()
+                ConsoleList = _service.GetCategoryList()
             };
 
-            if (!String.IsNullOrEmpty(searchString))
-            {
-                categorylist.ConsoleList = categorylist.ConsoleList.Where(x => x.Console_Name.ToLower().Replace(" ", string.Empty).Contains(searchString.ToLower().Replace(" ", string.Empty))).ToList();
-            }
+            categorylist.ConsoleList = SearchFilter.Filter(categorylist.ConsoleList, searchString, x => x.ConsoleName);
 
             return View("CategoryList", categorylist);
         }
         [HttpPost]
+        [RequireAdmin]
         public IActionResult DeleteCategory(int id)
         {
-            new DataBase_Service().DeleteCategory(id);
+            _service.DeleteCategory(id);
             return RedirectToAction("CategoryList");
         }
-        
+
+        [RequireAdmin]
         public IActionResult AddCategory()
         {
 
-            return View();
+            return View(new AddEditCategory() { CompanyList = _service.GetCompanyList() });
         }
         [HttpPost]
-        public IActionResult AddCategory(string categoryName)
+        [RequireAdmin]
+        public IActionResult AddCategory(string categoryName, int? company)
         {
-            new DataBase_Service().AddCategory(categoryName);
+            _service.AddCategory(categoryName, company);
             return RedirectToAction("CategoryList");
         }
 
         #endregion
 
+        #region Company
+
+        [RequireAdmin]
+        public IActionResult CompanyList(string searchString)
+        {
+            CompanyListModel companylist = new CompanyListModel()
+            {
+                CompanyList = _service.GetCompanyList()
+            };
+
+            companylist.CompanyList = SearchFilter.Filter(companylist.CompanyList, searchString, x => x.CompanyName);
+
+            return View("CompanyList", companylist);
+        }
+        [RequireAdmin]
+        public IActionResult AddCompany()
+        {
+
+            return View();
+        }
+        [HttpPost]
+        [RequireAdmin]
+        public IActionResult AddCompany(string companyName)
+        {
+            _service.AddCompany(companyName);
+            return RedirectToAction("CompanyList");
+        }
+        [RequireAdmin]
+        public IActionResult EditCompany(int id)
+        {
+
+            return View("EditCompany", new AddEditCompany() { Company = _service.GetSingleCompany(id) });
+        }
+        [HttpPost]
+        [RequireAdmin]
+        public IActionResult SaveEditedCompany(int company_id, string companyName)
+        {
+            _service.UpdateCompany(company_id, companyName);
+            return RedirectToAction("CompanyList");
+        }
+        [HttpPost]
+        [RequireAdmin]
+        public IActionResult DeleteCompany(int id)
+        {
+            _service.DeleteCompany(id);
+            return RedirectToAction("CompanyList");
+        }
+
+        #endregion
+
+        [RequireAdmin]
         public IActionResult AddUser()
         {
             return View();
@@ -170,67 +242,30 @@ namespace ManageGames.Controllers
                 CookieOptions cookieOptions = new CookieOptions();
                 //Cookie Ablaufdatum/Uhrzeit festlegen
                 cookieOptions.Expires = new DateTimeOffset(DateTime.Now.AddSeconds(600));
-                if (HttpContext.Request.Cookies.ContainsKey("GameSort+"))
+                if (HttpContext.Request.Cookies.ContainsKey(SessionCookie.CookieName))
                 {
                     //Bestehenden cookie mit den Nutzerdaten/ Cookiedaten vergleichen
-                    HttpContext.Response.Cookies.Delete("GameSort+");
+                    HttpContext.Response.Cookies.Delete(SessionCookie.CookieName);
 
                 }
-                HttpContext.Response.Cookies.Append("GameSort+", cookieValue, cookieOptions);
+                HttpContext.Response.Cookies.Append(SessionCookie.CookieName, cookieValue, cookieOptions);
             }
             return RedirectToAction("Index");
 
         }
 
-        public string LoginCheck(string username, string password)
+        private string LoginCheck(string username, string password)
         {
-            try
-            {
-                List<UserModel> userlist = new DataBase_Service().GetUserList();
-                UserModel user = userlist.Where(x => TrimToLower(x.Username).Equals(TrimToLower(username))).Where(o => o.Password.Equals(password)).First();
-                if (user != null)
-                {
-                    string cookieID = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10);
-                    new DataBase_Service().ChangeCookieId(user.UserID, cookieID);
-                    return user.UserID.ToString() + "+" + cookieID;
-                }
-
-                return string.Empty;
-            }
-            catch (Exception e)
+            UserModel? user = _service.ValidateCredentials(username, password);
+            if (user == null)
             {
                 return string.Empty;
             }
 
+            string cookieID = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10);
+            _service.ChangeCookieId(user.UserID, cookieID);
+            return user.UserID.ToString() + "+" + cookieID;
         }
-        public string[] CookieInfoList()
-        {
-            string cookie = HttpContext.Request.Cookies["GameSort+"];
-            return cookie.Split("+");
-        }
-        public bool CookieValidation()
-        {
-            if (HttpContext.Request.Cookies.ContainsKey("GameSort+"))
-            {
-                List<UserModel> userList = new DataBase_Service().GetUserList(); ;
-                string[] cookieUserList = CookieInfoList();
-                //UserModel user = userList.Where(o => o.UserID.Equals(Guid.Parse(cookieUserList[0]))).Where(o => o.CookieID.Equals(cookieUserList[1])).First();
-
-                if (!userList.Any(x => x.UserID.Equals(Guid.Parse(cookieUserList[0])) && x.CookieID.Equals(cookieUserList[1])))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-        public string TrimToLower(string word)
-        {
-            string tmp = word;
-            tmp = tmp.ToLower();
-            tmp = tmp.Replace(" ", "");
-            return tmp;
-        }
-
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {
