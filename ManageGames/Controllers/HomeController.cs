@@ -59,7 +59,7 @@ namespace ManageGames.Controllers
 
             indexModel.GamesList = SearchFilter.Filter(indexModel.GamesList, searchString, x => x.GameName);
             ViewBag.IsStartseite = "Yes";
-            return View("Index",indexModel);
+            return View("Index", indexModel);
         }
         [RequireLogin]
         public IActionResult WishList(string searchString)
@@ -235,7 +235,7 @@ namespace ManageGames.Controllers
             //Wenn der Login fehlschlägt dan miese kriese
             if (string.IsNullOrEmpty(cookieValue))
             {
-                return Index("",true);
+                return Index("", true);
             }
             else
             {
