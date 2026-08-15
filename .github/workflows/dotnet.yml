@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION: ManageGames.sln
+  PROJECT: ManageGames/ManageGames.csproj
+
+jobs:
+  build:
+    name: Build, audit & migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
+
+      # Fails the job if any direct or transitive NuGet package has a known advisory.
+      # This is also the signal for when the SQLitePCLRaw pin in the csproj can be dropped:
+      # once EF Core stops pulling the vulnerable e_sqlite3 transitively, remove the pin.
+      - name: Audit NuGet packages for vulnerabilities
+        run: |
+          dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulns.txt
+          if grep -q "has the following vulnerable packages" vulns.txt; then
+            echo "::error::Vulnerable NuGet packages detected (see the list above)."
+            exit 1
+          fi
+          echo "No vulnerable packages."
+
+      # Fails if the EF Core model was changed without adding a matching migration,
+      # i.e. the model and the latest migration snapshot are out of sync.
+      - name: Check for missing EF Core migrations
+        run: |
+          dotnet tool restore
+          dotnet dotnet-ef migrations has-pending-model-changes \
+            --project ${{ env.PROJECT }} \
+            --startup-project ${{ env.PROJECT }}
+
+  format:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION }}
+
+      # Enforces `dotnet format` style. NOTE: expected to be red until the existing
+      # code is normalized once by running `dotnet format ManageGames.sln` locally and
+      # committing the result.
+      - name: Verify formatting
+        run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore
