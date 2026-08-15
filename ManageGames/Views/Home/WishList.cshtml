@@ -35,9 +35,9 @@
                 <tr>
                     <td>@Model.WishList[i].GameId</td>
                     <td>@Model.WishList[i].User.Username</td>
-                    <td>@Model.WishList[i].Console.Console_Name</td>
+                    <td>@(Model.WishList[i].Console?.ConsoleName ?? "-")</td>
                     <td>@Model.WishList[i].GameName</td>
-                    <td>@Model.WishList[i].Anzah_von_Game</td>
+                    <td>@Model.WishList[i].Copies</td>
                     <td>
                         <div class="editDeleteDiv">
                             <form asp-controller="Home" asp-action="EditGame" method="post">
