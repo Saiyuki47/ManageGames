@@ -33,8 +33,8 @@
             {
                 <tr>
                     <td>@Model.ConsoleList[i].ConsoleId</td>
-                    <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Console_Name</td>
-                    <td>@Model.ConsoleList.Where(x=>x.ConsoleId.Equals(Model.ConsoleList[i].ConsoleId)).First().Company.CompanyName</td>
+                    <td>@Model.ConsoleList[i].ConsoleName</td>
+                    <td>@(Model.ConsoleList[i].Company?.CompanyName ?? "-")</td>
                     <td>
                         <div class="editDeleteDiv">
                             <form asp-controller="Home" asp-action="EditCategory" method="post">

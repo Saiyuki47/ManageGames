@@ -1,0 +1,30 @@
+@{
+    ViewData["Title"] = "Edit Company";
+}
+<link rel="stylesheet" runat="server" media="screen" href="~/css/AddEditGames.css" />
+<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+@model ManageGames.ViewModels.AddEditCompany;
+
+<div>
+    <form asp-controller=Home asp-action=SaveEditedCompany method="post">
+        <fieldset>
+            <legend>@ViewData["Title"]</legend>
+            <div>
+
+                <div>
+                    <label>Companyname:</label>
+                    <input type=text name="companyName" value="@(Model.Company.CompanyName)" required/>
+                    <input type="hidden" name="company_id" value="@Model.Company.CompanyId"/>
+                </div>
+
+                <div class="editResetDiv">
+                    <button type="submit">Save</button>
+                </div>
+
+            </div>
+
+        </fieldset>
+    </form>
+
+</div>

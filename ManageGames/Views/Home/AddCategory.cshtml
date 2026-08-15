@@ -16,6 +16,17 @@
                     <input type=text name="categoryName" required/>
                 </div>
 
+                <div>
+                    <label class="textshit">Company:</label>
+                    <select name="company">
+                        <option value="">(none)</option>
+                        @for (int i = 0; i < Model.CompanyList.Count; i++)
+                        {
+                            <option value="@Model.CompanyList[i].CompanyId">@Model.CompanyList[i].CompanyName</option>
+                        }
+                    </select>
+                </div>
+
                 <div class="editResetDiv">
                     <button type="submit">Save</button>
                 </div>

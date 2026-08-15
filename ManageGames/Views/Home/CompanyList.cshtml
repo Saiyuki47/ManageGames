@@ -1,0 +1,52 @@
+@{
+    ViewData["Title"] = "Companylist";
+}
+@model ManageGames.ViewModels.CompanyListModel;
+<link rel="stylesheet" runat="server" media="screen" href="~/css/list.css" />
+<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+<script src="~/js/list.js" language="javascript" type="text/javascript"></script>
+
+
+<div>
+    <div>
+        <h2 class="display-4">@ViewData["Title"]</h2>
+
+        <form asp-controller="Home" asp-action="CompanyList" id="searchBarCompanyList">
+            <p>
+                <input placeholder="Title" type="text" name="searchString" />
+                <button type="submit">Search</button>
+                <button type="button" onclick="resetButton('searchBarCompanyList');">Reset</button>
+            </p>
+        </form>
+    </div>
+
+    <div>
+        <table>
+            <tr>
+                <th>Id</th>
+                <th>Company</th>
+                <th>Edit/Delete</th>
+            </tr>
+
+            @for (int i = 0; i < @Model.CompanyList.Count; i++)
+            {
+                <tr>
+                    <td>@Model.CompanyList[i].CompanyId</td>
+                    <td>@Model.CompanyList[i].CompanyName</td>
+                    <td>
+                        <div class="editDeleteDiv">
+                            <form asp-controller="Home" asp-action="EditCompany" method="post">
+                                    <input type="hidden" name="id" value=@Model.CompanyList[i].CompanyId />
+                                    <button type="submit">Edit</button>
+                            </form>
+                            <form asp-controller="Home" asp-action="DeleteCompany" method="post">
+                                    <input type="hidden" name="id" value=@Model.CompanyList[i].CompanyId />
+                                    <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+    </table>
+    </div>
+</div>
