@@ -229,6 +229,27 @@ namespace ManageGames.Controllers
         }
 
         [HttpPost]
+        [RequireAdmin]
+        public IActionResult AddUser(string username, string password, bool isAdmin)
+        {
+            // Required fields are also enforced client-side; re-check here for crafted requests.
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                ViewBag.Error = "Username and password are required.";
+                return View();
+            }
+
+            // Fails only on a duplicate username now that the fields are known non-empty.
+            if (!_service.CreateUser(username, password, isAdmin))
+            {
+                ViewBag.Error = "This username is already taken.";
+                return View();
+            }
+
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
         public IActionResult LoginValidation(string username, string password)
         {
             string cookieValue = LoginCheck(username, password);

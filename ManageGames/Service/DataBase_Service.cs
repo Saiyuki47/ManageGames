@@ -119,14 +119,30 @@ namespace ManageGames.Service
             _db.Companies.Remove(company);
             _db.SaveChanges();
         }
-        public void CreateUser(string username, string password, bool isAdmin)
+        /// <summary>
+        /// Creates a user with a salted password hash. Returns false without writing when the
+        /// username or password is blank, or when the normalized username is already taken —
+        /// the UNIQUE index on NormalizedUsername would otherwise throw on SaveChanges.
+        /// </summary>
+        public bool CreateUser(string username, string password, bool isAdmin)
         {
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                return false;
+            }
+
+            var normalized = Normalize(username);
+            if (_db.Users.Any(u => u.NormalizedUsername == normalized))
+            {
+                return false;
+            }
+
             var user = new UserModel
             {
                 UserID = Guid.NewGuid(),
                 ProfilePicturesID = Guid.Empty,
                 Username = username,
-                NormalizedUsername = Normalize(username),
+                NormalizedUsername = normalized,
                 IsAdmin = isAdmin,
                 CookieID = "StartCook"
             };
@@ -135,6 +151,7 @@ namespace ManageGames.Service
 
             _db.Users.Add(user);
             _db.SaveChanges();
+            return true;
         }
         public void ChangeCookieId(Guid userID, string cookieID)
         {

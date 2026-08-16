@@ -1,6 +1,42 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
 @{
+    ViewData["Title"] = "Add User";
 }
-hallo
+<link rel="stylesheet" runat="server" media="screen" href="~/css/AddEditGames.css" />
+<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+<div>
+    <form asp-controller=Home asp-action=AddUser method="post">
+        <fieldset>
+            <legend>@ViewData["Title"]</legend>
+
+            @if (ViewBag.Error != null)
+            {
+                <div class="textshit" style="color:red">@ViewBag.Error</div>
+            }
+
+            <div>
+                <div>
+                    <label class="textshit">Username:</label>
+                    <input type="text" name="username" required />
+                </div>
+
+                <div>
+                    <label class="textshit">Password:</label>
+                    <input type="password" name="password" required />
+                </div>
+
+                <div>
+                    <label class="textshit">Admin:</label>
+                    <input type="checkbox" name="isAdmin" value="true" />
+                </div>
+
+                <div class="editResetDiv">
+                    <button type="submit">Save</button>
+                </div>
+
+            </div>
+
+        </fieldset>
+    </form>
+
+</div>
