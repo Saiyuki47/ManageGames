@@ -1,0 +1,71 @@
+using System.ComponentModel.DataAnnotations;
+using ManageGames.Models;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+
+namespace ManageGames.ViewModels
+{
+    /// <summary>Posted by the login form in the layout.</summary>
+    public class LoginViewModel
+    {
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public string? ReturnUrl { get; set; }
+    }
+
+    public class ChangePasswordViewModel
+    {
+        [Required]
+        [DataType(DataType.Password)]
+        [Display(Name = "Current password")]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(FieldLimits.PasswordMaxLength, MinimumLength = FieldLimits.PasswordMinLength)]
+        [DataType(DataType.Password)]
+        [Display(Name = "New password")]
+        public string NewPassword { get; set; } = string.Empty;
+
+        [Required]
+        [Compare(nameof(NewPassword), ErrorMessage = "The passwords don't match.")]
+        [DataType(DataType.Password)]
+        [Display(Name = "Repeat new password")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class UserListViewModel
+    {
+        public List<UserModel> Users { get; set; } = [];
+        public Guid CurrentUserId { get; set; }
+    }
+
+    public class CreateUserViewModel
+    {
+        [Required]
+        [StringLength(FieldLimits.UsernameMaxLength)]
+        [Display(Name = "Username")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(FieldLimits.PasswordMaxLength, MinimumLength = FieldLimits.PasswordMinLength)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Initial password")]
+        public string Password { get; set; } = string.Empty;
+
+        [Display(Name = "Administrator")]
+        public bool IsAdmin { get; set; }
+    }
+
+    public class ResetPasswordViewModel
+    {
+        [BindNever]
+        [ValidateNever]
+        public string Username { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(FieldLimits.PasswordMaxLength, MinimumLength = FieldLimits.PasswordMinLength)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Temporary password")]
+        public string NewPassword { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,46 @@
+@model ConsoleListViewModel
+@{
+    ViewData["Title"] = "Consoles";
+}
+
+<h2 class="display-4">@ViewData["Title"]</h2>
+
+<div class="list-toolbar">
+    <partial name="_SearchForm" model="Model.Search ?? string.Empty" />
+    <a class="button-link" asp-action="Create">Add a console</a>
+</div>
+
+@if (Model.Consoles.Count == 0)
+{
+    <p class="empty-hint">@(string.IsNullOrWhiteSpace(Model.Search) ? "No consoles yet." : "No consoles match your search.")</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Console</th>
+                <th>Company</th>
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var console in Model.Consoles)
+            {
+                <tr>
+                    <td>@console.ConsoleName</td>
+                    <td>@(console.Company?.CompanyName ?? "-")</td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@console.ConsoleId">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@console.ConsoleId" method="post"
+                                  data-confirm="Delete &quot;@console.ConsoleName&quot;? Games on this console are kept, without a console.">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

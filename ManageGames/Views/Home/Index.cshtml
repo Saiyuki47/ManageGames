@@ -1,57 +1,9 @@
-﻿@{
-    ViewData["Title"] = "Games";
+@{
+    ViewData["Title"] = "Welcome";
 }
-@model ManageGames.ViewModels.IndexModel;
-<link rel="stylesheet" runat="server" media="screen" href="~/css/list.css" />
-<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-<script src="~/js/list.js" language="javascript" type="text/javascript"></script>
 
-<div>
-    <div>
-        <h2 class="display-4">@ViewData["Title"]</h2>
-
-        <form asp-controller="Home" asp-action="Index"  id="searchBarIndex">
-            <p>
-                <input type="text" placeholder="Title" name="searchString" />
-                <button type="submit">Search</button>
-                <button type="button" onclick="resetButton('searchBarIndex');">Reset</button>
-            </p>
-        </form>
-    </div>
-    
-    <div>
-        <table>
-            <tr>
-                <th>Id</th>
-                <th>User</th>
-                <th>Console</th>
-                <th>Gametitle</th>
-                <th>Games Count</th>
-                <th>Edit/Delete</th>
-            </tr>
-
-            @for (int i = 0; i < @Model.GamesList.Count ; i++)
-            {
-                <tr>
-                    <td>@Model.GamesList[i].GameId</td>
-                    <td>@Model.GamesList[i].User.Username</td>
-                    <td>@(Model.GamesList[i].Console?.ConsoleName ?? "-")</td>
-                    <td>@Model.GamesList[i].GameName</td>
-                    <td>@Model.GamesList[i].Copies</td>
-                    <td>
-                        <div class="editDeleteDiv">
-                            <form asp-controller="Home" asp-action="EditGame" method="post">
-                                    <input type="hidden" name="id" value=@Model.GamesList[i].GameId />
-                                    <button type="submit">Edit</button>
-                            </form>
-                            <form asp-controller="Home" asp-action="DeleteGame" method="post">
-                                    <input type="hidden" name="id" value=@Model.GamesList[i].GameId />
-                                    <button type="submit">Delete</button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-            }
-        </table>
-    </div>
-</div>
+<section class="landing">
+    <h1 class="display-4">ManageGames</h1>
+    <p class="lead">Keep track of your game collection: games, consoles, makers and a wishlist.</p>
+    <p><button type="button" data-open-login>Log in</button> to get started.</p>
+</section>

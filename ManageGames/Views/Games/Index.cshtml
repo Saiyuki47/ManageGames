@@ -1,0 +1,47 @@
+@model GameListViewModel
+@{
+    ViewData["Title"] = Model.IsWishList ? "Wishlist" : "Games";
+}
+
+<h2 class="display-4">@ViewData["Title"]</h2>
+
+<div class="list-toolbar">
+    <partial name="_SearchForm" model="Model.Search ?? string.Empty" />
+    <a class="button-link" asp-action="Create" asp-route-wishlist="@(Model.IsWishList ? "true" : null)">Add a game</a>
+</div>
+
+@if (Model.Games.Count == 0)
+{
+    <p class="empty-hint">@(string.IsNullOrWhiteSpace(Model.Search) ? "No games here yet." : "No games match your search.")</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Console</th>
+                <th class="numeric">Copies</th>
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var game in Model.Games)
+            {
+                <tr>
+                    <td>@game.GameName</td>
+                    <td>@(game.Console?.ConsoleName ?? "-")</td>
+                    <td class="numeric">@game.Copies</td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@game.GameId">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@game.GameId" method="post" data-confirm="Delete &quot;@game.GameName&quot;?">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

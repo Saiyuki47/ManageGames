@@ -17,7 +17,7 @@ env:
 
 jobs:
   build:
-    name: Build, audit & migrations
+    name: Build, test, audit & migrations
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,12 +30,15 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION }}
 
+      # Warnings fail the build (TreatWarningsAsErrors in Directory.Build.props).
       - name: Build
         run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
 
+      # Integration tests host the real app in memory against throw-away SQLite databases.
+      - name: Test
+        run: dotnet test ${{ env.SOLUTION }} --configuration Release --no-build
+
       # Fails the job if any direct or transitive NuGet package has a known advisory.
-      # This is also the signal for when the SQLitePCLRaw pin in the csproj can be dropped:
-      # once EF Core stops pulling the vulnerable e_sqlite3 transitively, remove the pin.
       - name: Audit NuGet packages for vulnerabilities
         run: |
           dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulns.txt
@@ -68,8 +71,6 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION }}
 
-      # Enforces `dotnet format` style. NOTE: expected to be red until the existing
-      # code is normalized once by running `dotnet format ManageGames.sln` locally and
-      # committing the result.
+      # Enforces `dotnet format` style; run `dotnet format ManageGames.sln` locally to fix.
       - name: Verify formatting
         run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore

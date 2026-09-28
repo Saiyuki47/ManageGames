@@ -1,0 +1,46 @@
+@model UserListViewModel
+@{
+    ViewData["Title"] = "Users";
+}
+
+<h2 class="display-4">@ViewData["Title"]</h2>
+
+<div class="list-toolbar list-toolbar-end">
+    <a class="button-link" asp-action="Create">Add a user</a>
+</div>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Password</th>
+            <th>Created</th>
+            <th><span class="visually-hidden">Actions</span></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model.Users)
+        {
+            var isSelf = user.UserID == Model.CurrentUserId;
+            <tr>
+                <td>@user.Username @(isSelf ? "(you)" : "")</td>
+                <td>@(user.IsAdmin ? "Admin" : "User")</td>
+                <td>@(user.MustChangePassword ? "Must be changed" : "Chosen by the user")</td>
+                <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
+                <td>
+                    @if (!isSelf)
+                    {
+                        <div class="row-actions">
+                            <a class="button-link" asp-action="ResetPassword" asp-route-id="@user.UserID">Reset password</a>
+                            <form asp-action="Delete" asp-route-id="@user.UserID" method="post"
+                                  data-confirm="Delete the user &quot;@user.Username&quot; and all of their games?">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

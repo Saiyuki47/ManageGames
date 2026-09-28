@@ -1,4 +1,12 @@
-﻿<!DOCTYPE html>
+@{
+    var isSignedIn = User.Identity?.IsAuthenticated == true;
+    var isAdmin = User.IsInRole(Roles.Admin);
+    var loginError = TempData[TempDataKeys.LoginError] as string;
+    var returnUrl = Context.Request.Query["ReturnUrl"].ToString();
+    // Open the login form right away after a failed login or when a protected page sent the user here.
+    var showLogin = !isSignedIn && (loginError != null || returnUrl.Length > 0);
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -7,94 +15,98 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ManageGames.styles.css" asp-append-version="true" />
-    <script src="@string.Format("~/js/site.js?v={0}", DateTime.Now.Ticks)" language="javascript" type="text/javascript"></script>
-    <style rel="stylesheet" onload="loginFailed('@Html.Raw(ViewBag.FalscheAnmeldung)'); checkCookie('@Html.Raw(ViewBag.IsStartseite)'); checkMode();"></style>
-     
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3" id="navbaryeah">
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand" id="HomeButton" asp-area="" asp-controller="Home" asp-action="Index">ManageGames</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">ManageGames</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-navigation" aria-controls="main-navigation"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1" >
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="Index">Game List</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddGame">Add a Game</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="CategoryList">Category List</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddCategory">Add Category</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="CompanyList">Company List</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddCompany">Add Company</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="WishList">Wishlist</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-black premiumButton" style="display:none" asp-area="" asp-controller="Home" asp-action="AddUser">Add User</a>
-                        </li>
-                        <li class="nav-item">
-                            <div></div>
-                        </li>
-                        <li class="nav-item">
-                            <button id="logInButton" onclick="openLoginWindow()">Anmelden</button>
-                        </li>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between" id="main-navigation">
+                    <ul class="navbar-nav flex-grow-1">
+                        @if (isSignedIn)
+                        {
+                            <li class="nav-item"><a class="nav-link text-dark" asp-controller="Games" asp-action="Index">Games</a></li>
+                            <li class="nav-item"><a class="nav-link text-dark" asp-controller="Games" asp-action="Wishlist">Wishlist</a></li>
+                            <li class="nav-item"><a class="nav-link text-dark" asp-controller="Games" asp-action="Create">Add a game</a></li>
+                            @if (isAdmin)
+                            {
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Consoles" asp-action="Index">Consoles</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Companies" asp-action="Index">Companies</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Users" asp-action="Index">Users</a></li>
+                            }
+                        }
                     </ul>
+                    <div class="navbar-account">
+                        @if (isSignedIn)
+                        {
+                            <a class="nav-link text-dark" asp-controller="Account" asp-action="ChangePassword" title="Change your password">@User.Identity!.Name</a>
+                            <form asp-controller="Account" asp-action="Logout" method="post">
+                                <button type="submit">Log out</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <button type="button" data-open-login>Log in</button>
+                        }
+                    </div>
                 </div>
             </div>
         </nav>
     </header>
-    
-    <form id="LogInForm" method="post" asp-controller="Home" asp-action="LoginValidation">
-        <div class="LoginBox" >
-            <h1 id="LogInCaption">Log In </h1>
-            <div class="divAusenrum">
-              <input type="text" name="username" id="username" required/>
-              <label>Username</label>
+
+    @if (!isSignedIn)
+    {
+        <form id="login-overlay" class="login-overlay @(showLogin ? "open" : null)" method="post" asp-controller="Account" asp-action="Login">
+            <input type="hidden" name="ReturnUrl" value="@returnUrl" />
+            <div class="login-box">
+                <h1>Log in</h1>
+                @if (loginError != null)
+                {
+                    <p class="login-message login-error" role="alert">@loginError</p>
+                }
+                else if (returnUrl.Length > 0)
+                {
+                    <p class="login-message">Please log in to continue.</p>
+                }
+                <div class="login-field">
+                    <input type="text" name="Username" id="username" autocomplete="username" required />
+                    <label for="username">Username</label>
+                </div>
+                <div class="login-field">
+                    <input type="password" name="Password" id="password" autocomplete="current-password" required />
+                    <label for="password">Password</label>
+                </div>
+                <button type="submit">Log in</button>
+                <button type="button" data-close-login>Cancel</button>
             </div>
+        </form>
+    }
 
-            <div class="divAusenrum">
-              <input type="password" name="password" id="password" required/>
-              <label>Password</label>
-            </div>
-
-            <button type="submit">Login</button>
-            <button onclick="event.preventDefault(); closeLoginWindow();">Cancel</button>
-            @*<input type="submit" value="Login" />
-            <input type="button" onclick="closeLoginWindow()" value="Cancel" />*@
-        </div>
-    </form>
-
-    <div class="container" id="containerToBlurr" >
-        <main role="main" style="width:100%;height:100%;" class="pb-3">
+    <div class="container @(showLogin ? "blurred" : null)" id="page-content">
+        <main role="main" class="pb-3">
+            @if (TempData[TempDataKeys.Message] is string message)
+            {
+                <p class="flash flash-success" role="status">@message</p>
+            }
+            @if (TempData[TempDataKeys.Error] is string error)
+            {
+                <p class="flash flash-error" role="alert">@error</p>
+            }
             @RenderBody()
         </main>
     </div>
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2022 - ManageGames - <a href="https://youtu.be/G0YnhfvIgrU">Privacy</a>
+            &copy; @DateTime.Now.Year - ManageGames - <a asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
-
-
 </body>
 </html>
-

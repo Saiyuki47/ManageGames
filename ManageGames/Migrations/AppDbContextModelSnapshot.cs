@@ -15,7 +15,7 @@ namespace ManageGames.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("ManageGames.Models.CompanyModel", b =>
                 {
@@ -130,10 +130,6 @@ namespace ManageGames.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("UserID");
 
-                    b.Property<string>("CookieID")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("CookieID");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -143,19 +139,24 @@ namespace ManageGames.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("IsAdmin");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("MustChangePassword");
+
                     b.Property<string>("NormalizedUsername")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("NormalizedUsername");
 
-                    b.Property<string>("Password")
+                    b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("TEXT")
-                        .HasColumnName("Password");
+                        .HasColumnName("PasswordHash");
 
-                    b.Property<Guid>("ProfilePicturesID")
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
                         .HasColumnType("TEXT")
-                        .HasColumnName("ProfilePicturesID");
+                        .HasColumnName("SecurityStamp");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()

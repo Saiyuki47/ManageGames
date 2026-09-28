@@ -1,0 +1,41 @@
+@model GameFormViewModel
+@{
+    var isNew = Model.Id == null;
+    ViewData["Title"] = isNew ? "Add a game" : "Edit game";
+}
+
+<form asp-action="@(isNew ? "Create" : "Edit")" asp-route-id="@Model.Id" method="post" class="edit-form">
+    <fieldset>
+        <legend>@ViewData["Title"]</legend>
+
+        <div class="form-row">
+            <label asp-for="Name"></label>
+            <input asp-for="Name" required autofocus />
+            <span asp-validation-for="Name" class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="ConsoleId"></label>
+            <select asp-for="ConsoleId" asp-items="Model.ConsoleOptions">
+                <option value="">(none)</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="Copies"></label>
+            <input asp-for="Copies" min="1" max="@FieldLimits.CopiesMax" required />
+            <span asp-validation-for="Copies" class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="OnWishList"></label>
+            <input asp-for="OnWishList" />
+        </div>
+
+        <div class="form-actions">
+            <a class="button-link" asp-action="@(Model.OnWishList ? "Wishlist" : "Index")">Cancel</a>
+            <button type="reset">Reset</button>
+            <button type="submit">@(isNew ? "Add" : "Save")</button>
+        </div>
+    </fieldset>
+</form>

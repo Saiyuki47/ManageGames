@@ -1,0 +1,10 @@
+@model string
+@* Search box of the list pages. It submits to the current page, so it works for every list. *@
+<form method="get" class="search-form" role="search">
+    <input type="search" name="search" value="@Model" placeholder="Search…" aria-label="Search" />
+    <button type="submit">Search</button>
+    @if (!string.IsNullOrWhiteSpace(Model))
+    {
+        <a class="button-link" href="@Context.Request.Path">Reset</a>
+    }
+</form>

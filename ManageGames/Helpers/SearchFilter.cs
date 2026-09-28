@@ -2,7 +2,7 @@ namespace ManageGames.Helpers
 {
     /// <summary>
     /// Shared case- and whitespace-insensitive substring filter used by the list pages
-    /// (games, wishlist, categories, companies), so the normalize-and-contains search logic
+    /// (games, wishlist, consoles, companies), so the normalize-and-contains search logic
     /// lives in one place instead of being copy-pasted per controller action.
     /// </summary>
     public static class SearchFilter
@@ -24,7 +24,7 @@ namespace ManageGames.Helpers
 
         private static string Normalize(string? value)
         {
-            return (value ?? string.Empty).ToLower().Replace(" ", string.Empty);
+            return (value ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
         }
     }
 }

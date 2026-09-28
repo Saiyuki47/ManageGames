@@ -1,0 +1,44 @@
+@model CompanyListViewModel
+@{
+    ViewData["Title"] = "Companies";
+}
+
+<h2 class="display-4">@ViewData["Title"]</h2>
+
+<div class="list-toolbar">
+    <partial name="_SearchForm" model="Model.Search ?? string.Empty" />
+    <a class="button-link" asp-action="Create">Add a company</a>
+</div>
+
+@if (Model.Companies.Count == 0)
+{
+    <p class="empty-hint">@(string.IsNullOrWhiteSpace(Model.Search) ? "No companies yet." : "No companies match your search.")</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Company</th>
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var company in Model.Companies)
+            {
+                <tr>
+                    <td>@company.CompanyName</td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@company.CompanyId">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@company.CompanyId" method="post"
+                                  data-confirm="Delete &quot;@company.CompanyName&quot;? Its consoles are kept, without a company.">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -1,0 +1,29 @@
+@model ConsoleFormViewModel
+@{
+    var isNew = Model.Id == null;
+    ViewData["Title"] = isNew ? "Add a console" : "Edit console";
+}
+
+<form asp-action="@(isNew ? "Create" : "Edit")" asp-route-id="@Model.Id" method="post" class="edit-form">
+    <fieldset>
+        <legend>@ViewData["Title"]</legend>
+
+        <div class="form-row">
+            <label asp-for="Name"></label>
+            <input asp-for="Name" required autofocus />
+            <span asp-validation-for="Name" class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="CompanyId"></label>
+            <select asp-for="CompanyId" asp-items="Model.CompanyOptions">
+                <option value="">(none)</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <a class="button-link" asp-action="Index">Cancel</a>
+            <button type="submit">Save</button>
+        </div>
+    </fieldset>
+</form>

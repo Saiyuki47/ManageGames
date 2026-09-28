@@ -1,6 +1,16 @@
-﻿@{
-    ViewData["Title"] = "Privacy Policy";
+@{
+    ViewData["Title"] = "Privacy";
 }
 <h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+<p>
+    ManageGames runs on your own machine and keeps all data in a local SQLite database.
+    Nothing is sent to third parties, and there is no analytics or tracking.
+</p>
+<p>The app only sets the cookies it needs to work:</p>
+<ul>
+    <li><code>ManageGames.Auth</code> keeps you signed in. It ends when you log out, usually when you close the browser, and after two hours without activity.</li>
+    <li>An antiforgery cookie protects the forms against cross-site request forgery.</li>
+    <li>A short-lived message cookie carries one-time notices, such as a failed login, to the next page.</li>
+</ul>
+<p>Passwords are stored only as salted hashes.</p>

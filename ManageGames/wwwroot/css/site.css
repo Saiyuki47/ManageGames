@@ -1,105 +1,264 @@
 html {
-  font-size: 14px;
+    font-size: 14px;
+    position: relative;
+    min-height: 100%;
 }
 
 @media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-html {
-  position: relative;
-  min-height: 100%;
+    html {
+        font-size: 16px;
+    }
 }
 
 body {
-  margin-bottom: 60px;
+    margin-bottom: 60px;
 }
 
-button {
-    padding: 4px 20px;
-    border: none;
-    outline: none;
-    cursor: pointer;
+/* Buttons and button-styled links share one look. */
+button,
+.button-link {
+    display: inline-block;
     padding: 3px 20px;
-    font-size: 15px;
-    background-color: #43b1e6;
-}
-.LoginBox {
-    position: relative;
-    width: 310px;
-    height: 370px;
-    border-radius: 5px;
-    outline-style: solid;
-    outline-color: black;
-    background-color: #282b30;
-    padding: 65px 40px 20px 40px;
-    box-shadow: 10px 10px 20px rgba(255, 255, 255, 0.505), -10px -10px 20px rgba(255, 255, 255, 0.361);
-    color: #006798;
-}
-
-#LogInCaption {
-    text-align: center;
-    font-family: 'Roboto', sans-serif;
-    font-size: 30px;
-}
-
-.divAusenrum {
-    margin: 20px 0;
-    position: relative;
-}
-
-#LogInForm {
-    margin-left: auto;
-    margin-right: auto;
-    margin-top: auto;
-    margin-bottom: auto;
-    width: 310px;
-    height: 370px;
-    display: none;
-}
-
-.divAusenrum input {
-    width: 100%;
-    height: 40px;
-    background: transparent;
-    outline: none;
     border: none;
-    border-bottom: 0.4px solid rgb(255, 255, 255);
-    font-size: 17px;
-    padding-top: 20px;
-    color: white;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #000;
+    background-color: #43b1e6;
+    text-decoration: none;
+    white-space: nowrap;
 }
 
-.divAusenrum label {
-    position: absolute;
-    left: 0;
-    bottom: 5px;
-    pointer-events: none;
-    transition: 0.6s;
+    button:hover,
+    .button-link:hover {
+        color: #000;
+        background-color: #2f9fd6;
+    }
+
+    button:focus-visible,
+    .button-link:focus-visible {
+        outline: 2px solid #006798;
+        outline-offset: 2px;
+    }
+
+/* Navigation: account name and logout on the right. */
+.navbar-account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .navbar-account form {
+        margin: 0;
+    }
+
+/* Login overlay, opened by [data-open-login] (see site.js) or by the server after a failed login. */
+.login-overlay {
+    display: none;
+    width: 310px;
+    margin: 0 auto 20px;
+}
+
+    .login-overlay.open {
+        display: block;
+    }
+
+.login-box {
+    min-height: 370px;
+    border-radius: 5px;
+    outline: 1px solid #000;
+    background-color: #282b30;
+    padding: 50px 40px 20px;
+    box-shadow: 10px 10px 20px rgba(255, 255, 255, 0.505), -10px -10px 20px rgba(255, 255, 255, 0.361);
+    color: #43b1e6;
+}
+
+    .login-box h1 {
+        text-align: center;
+        font-family: 'Roboto', sans-serif;
+        font-size: 30px;
+    }
+
+.login-message {
+    margin: 10px 0 0;
+    color: #cfd8dc;
     font-size: 14px;
 }
 
-form input:focus + label,
-input:valid ~ label {
-    bottom: 24px;
-    left: 2px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 13px;
+.login-error {
+    color: #ff8a80;
 }
 
-.blurrEffect {
-    background-color: rgba(235, 235, 235, .3);
+.login-field {
+    position: relative;
+    margin: 20px 0;
+}
+
+    .login-field input {
+        width: 100%;
+        height: 40px;
+        padding-top: 20px;
+        border: none;
+        border-bottom: 1px solid #fff;
+        outline: none;
+        background: transparent;
+        color: #fff;
+        font-size: 17px;
+    }
+
+    .login-field label {
+        position: absolute;
+        left: 0;
+        bottom: 5px;
+        pointer-events: none;
+        transition: 0.6s;
+        font-size: 14px;
+    }
+
+    /* Float the label above the field once it has focus or content. */
+    .login-field input:focus + label,
+    .login-field input:valid + label {
+        bottom: 24px;
+        left: 2px;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 13px;
+    }
+
+.login-box button + button {
+    margin-left: 5px;
+}
+
+/* The page behind the open login overlay. */
+.blurred {
     filter: blur(8px);
-    inset: 0%;
-    position: absolute;
-    z-index: -1;
+    pointer-events: none;
+    user-select: none;
 }
 
-#logInButton {
-    margin: 5px;
+/* One-time messages after a redirect. */
+.flash {
+    padding: 8px 12px;
+    border-left: 4px solid;
 }
 
-.premiumButton {
+.flash-success {
+    border-color: #43a047;
+    background-color: #e8f5e9;
+}
+
+.flash-error {
+    border-color: #c62828;
+    background-color: #ffebee;
+}
+
+/* List pages: search box and "add" button above the table. */
+.list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.list-toolbar-end {
+    justify-content: flex-end;
+}
+
+.search-form {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+}
+
+.data-table {
+    border-collapse: collapse;
+    margin: 10px 0;
+}
+
+    .data-table th,
+    .data-table td {
+        padding: 5px 10px;
+        border: 1px solid;
+        text-align: left;
+        vertical-align: middle;
+    }
+
+    .data-table .numeric {
+        text-align: center;
+    }
+
+.row-actions {
+    display: flex;
+    gap: 5px;
+}
+
+    .row-actions form {
+        margin: 0;
+    }
+
+.empty-hint {
+    color: #6c757d;
+}
+
+/* Add and edit forms. */
+.edit-form fieldset {
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px 20px;
+    outline: 1px solid #000;
+}
+
+.edit-form legend {
+    float: none;
+    width: auto;
+    padding: 0 5px;
+}
+
+.form-hint {
+    max-width: 380px;
+    color: #6c757d;
+}
+
+/* Label column and field column; errors wrap below the field instead of widening the form. */
+.form-row {
+    display: grid;
+    grid-template-columns: 160px 220px;
+    align-items: center;
+    gap: 4px 10px;
+    margin: 6px 0;
+}
+
+    .form-row input:not([type=checkbox]),
+    .form-row select {
+        width: 100%;
+    }
+
+    .form-row input[type=checkbox] {
+        justify-self: start;
+    }
+
+@media (max-width: 480px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.field-error {
+    grid-column: -2;
+    color: #c62828;
+    font-size: 0.9em;
+}
+
+    .field-error:empty {
+        display: none;
+    }
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-top: 10px;
 }

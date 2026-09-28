@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Shared by the app and the test project. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Keep the build warning-free: any compiler warning fails the build, locally and in CI. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- NuGet vulnerability advisories stay warnings; the CI audit step fails on them instead,
+         so a newly published advisory doesn't suddenly break local builds. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+</Project>

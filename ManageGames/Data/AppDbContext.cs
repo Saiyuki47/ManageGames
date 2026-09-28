@@ -43,12 +43,12 @@ namespace ManageGames.Data
                 e.ToTable("tblUser");
                 e.HasKey(u => u.UserID);
                 e.Property(u => u.UserID).HasColumnName("UserID").ValueGeneratedNever();
-                e.Property(u => u.ProfilePicturesID).HasColumnName("ProfilePicturesID");
                 e.Property(u => u.Username).HasColumnName("Username");
                 e.Property(u => u.NormalizedUsername).HasColumnName("NormalizedUsername");
-                e.Property(u => u.Password).HasColumnName("Password");
+                e.Property(u => u.PasswordHash).HasColumnName("PasswordHash");
                 e.Property(u => u.IsAdmin).HasColumnName("IsAdmin");
-                e.Property(u => u.CookieID).HasColumnName("CookieID");
+                e.Property(u => u.MustChangePassword).HasColumnName("MustChangePassword");
+                e.Property(u => u.SecurityStamp).HasColumnName("SecurityStamp");
                 e.HasIndex(u => u.NormalizedUsername).IsUnique();
             });
 
@@ -66,9 +66,11 @@ namespace ManageGames.Data
                  .WithMany()
                  .HasForeignKey(g => g.ConsoleId)
                  .OnDelete(DeleteBehavior.SetNull);
+                // Deleting a user deletes their games along with them.
                 e.HasOne(g => g.User)
                  .WithMany()
-                 .HasForeignKey(g => g.UserId);
+                 .HasForeignKey(g => g.UserId)
+                 .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Every ITimestamped entity gets a DB-side default so rows inserted outside EF

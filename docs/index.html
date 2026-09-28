@@ -130,7 +130,7 @@
         <div class="card"><div class="ico">🎮</div><h3>Your game library</h3><p>Add, edit and remove games, track how many copies you own, and search your collection.</p></div>
         <div class="card"><div class="ico">🕹️</div><h3>Consoles &amp; makers</h3><p>Group games by console and link each console to the company that makes it.</p></div>
         <div class="card"><div class="ico">⭐</div><h3>Wishlist</h3><p>Flag the games you still want and keep them on a separate wishlist.</p></div>
-        <div class="card"><div class="ico">🔒</div><h3>Personal accounts</h3><p>Log in and see only your own collection — data is scoped per user, server-side.</p></div>
+        <div class="card"><div class="ico">🔒</div><h3>Personal accounts</h3><p>Log in and see only your own collection — data is scoped per user, server-side. Admins manage the shared consoles, companies and user accounts.</p></div>
       </div>
     </div>
   </section>
@@ -146,6 +146,7 @@
         <span class="tech">SQLite</span>
         <span class="tech">Cookie authentication</span>
         <span class="tech">EF Core Migrations</span>
+        <span class="tech">xUnit integration tests</span>
       </div>
     </div>
   </section>
@@ -161,7 +162,8 @@
 <span class="p">dotnet</span> run --project ManageGames
 
 <span class="c"># then open https://localhost:7200</span>
-<span class="c"># a default admin is seeded on first run: user / password1 (change it)</span></pre>
+<span class="c"># the first start creates the account "admin" and prints its one-time</span>
+<span class="c"># password to the console; you choose your own at the first login</span></pre>
       </div>
       <p class="note">Requires the .NET 10 SDK. The database is created automatically on first start.</p>
     </div>

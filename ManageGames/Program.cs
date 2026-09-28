@@ -1,26 +1,84 @@
+using System.Threading.RateLimiting;
+using ManageGames.Auth;
 using ManageGames.Data;
-using ManageGames.Service;
+using ManageGames.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+{
+    // Every POST must carry the antiforgery token the form tag helper emits (CSRF protection).
+    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    options.Filters.Add<RequirePasswordChangeFilter>();
+});
 
-// SQLite database lives under the content root in the DB folder.
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "DB", "DataBase.db");
-Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
-builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
-builder.Services.AddScoped<DataBase_Service>();
+// SQLite database under the content root unless a connection string is configured. The setting is
+// read when a context is created, so configuration overrides (e.g. from the tests) are honored.
+var defaultDbPath = Path.Combine(builder.Environment.ContentRootPath, "DB", "DataBase.db");
+Directory.CreateDirectory(Path.GetDirectoryName(defaultDbPath)!);
+builder.Services.AddDbContext<AppDbContext>((services, options) =>
+    options.UseSqlite(services.GetRequiredService<IConfiguration>().GetConnectionString("ManageGames")
+        ?? $"Data Source={defaultDbPath}"));
+
+builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<ConsoleService>();
+builder.Services.AddScoped<CompanyService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<AuthCookieEvents>();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        // A distinct name, because cookies on localhost are shared by all ports, i.e. by every local app.
+        // The cookie is HttpOnly by default and marked Secure whenever the request is HTTPS.
+        options.Cookie.Name = "ManageGames.Auth";
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.ExpireTimeSpan = TimeSpan.FromHours(2);
+        options.SlidingExpiration = true;
+        // The start page hosts the login form and opens it when a protected page redirects there.
+        options.LoginPath = "/";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+        // Checks each request's cookie against the user's security stamp (server-side revocation).
+        options.EventsType = typeof(AuthCookieEvents);
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    // Secure by default: every endpoint requires a signed-in user unless it is marked [AllowAnonymous].
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        return new ValueTask(context.HttpContext.Response.WriteAsync(
+            "Too many login attempts. Please wait a minute and try again.", cancellationToken));
+    };
+    options.AddPolicy(RateLimitPolicies.Login, httpContext =>
+    {
+        var permitLimit = httpContext.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:LoginPermitLimit", 10);
+        return RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = permitLimit, Window = TimeSpan.FromMinutes(1) });
+    });
+});
 
 var app = builder.Build();
 
-// Apply any pending migrations (creates the database on first run) and seed the defaults.
+// Apply pending migrations (creates the database on first run) and create the first admin.
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
-    scope.ServiceProvider.GetRequiredService<DataBase_Service>().EnsureSeeded();
+    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+    scope.ServiceProvider.GetRequiredService<UserService>()
+        .EnsureInitialAdmin(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
 }
 
 // Configure the HTTP request pipeline.
@@ -36,6 +94,8 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseRateLimiter();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(

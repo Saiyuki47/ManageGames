@@ -1,0 +1,33 @@
+@model CreateUserViewModel
+@{
+    ViewData["Title"] = "Add a user";
+}
+
+<form asp-action="Create" method="post" class="edit-form">
+    <fieldset>
+        <legend>@ViewData["Title"]</legend>
+        <p class="form-hint">The user has to replace the initial password with their own at the first login.</p>
+
+        <div class="form-row">
+            <label asp-for="Username"></label>
+            <input asp-for="Username" autocomplete="off" required autofocus />
+            <span asp-validation-for="Username" class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="Password"></label>
+            <input asp-for="Password" autocomplete="new-password" required />
+            <span asp-validation-for="Password" class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+            <label asp-for="IsAdmin"></label>
+            <input asp-for="IsAdmin" />
+        </div>
+
+        <div class="form-actions">
+            <a class="button-link" asp-action="Index">Cancel</a>
+            <button type="submit">Save</button>
+        </div>
+    </fieldset>
+</form>
