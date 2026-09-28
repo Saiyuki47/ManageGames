@@ -362,7 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# Local SQLite database (runtime data, recreated on first start; may contain credentials)
-ManageGames/DB/*.db
-ManageGames/DB/*.db-shm
-ManageGames/DB/*.db-wal
+# Local SQLite database: runtime data that the app creates on first start and that holds
+# password hashes. The whole folder is ignored, including SQLite's -wal/-shm/-journal files.
+ManageGames/DB/
