@@ -1,6 +1,7 @@
 using ManageGames.Auth;
 using ManageGames.Services;
 using ManageGames.ViewModels;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -14,17 +15,33 @@ namespace ManageGames.Controllers
     public class AccountController : Controller
     {
         private readonly UserService _users;
+        private readonly IAntiforgery _antiforgery;
 
-        public AccountController(UserService users)
+        public AccountController(UserService users, IAntiforgery antiforgery)
         {
             _users = users;
+            _antiforgery = antiforgery;
         }
 
         [HttpPost]
         [AllowAnonymous]
         [EnableRateLimiting(RateLimitPolicies.Login)]
+        // Validated below: the form's token belongs to an anonymous visitor, so the global check would
+        // reject it with 400 when the request already carries a valid auth cookie.
+        [IgnoreAntiforgeryToken]
         public async Task<IActionResult> Login(LoginViewModel form)
         {
+            // Already signed in, e.g. in another tab, or a cross-site link showed the login form because
+            // the SameSite=Strict cookie wasn't sent with it: keep the existing session.
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                return RedirectAfterLogin(form.ReturnUrl);
+            }
+            if (!await _antiforgery.IsRequestValidAsync(HttpContext))
+            {
+                return BadRequest();
+            }
+
             var user = _users.ValidateCredentials(form.Username, form.Password);
             if (user == null)
             {
@@ -34,22 +51,24 @@ namespace ManageGames.Controllers
             }
 
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, UserClaims.CreatePrincipal(user));
-
-            // Only follow local return URLs, so the login can't be abused as an open redirect.
-            if (Url.IsLocalUrl(form.ReturnUrl))
-            {
-                return LocalRedirect(form.ReturnUrl);
-            }
-            return RedirectToAction("Index", "Games");
+            return RedirectAfterLogin(form.ReturnUrl);
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [AllowPendingPasswordChange]
+        // The session may already have ended (expired, or logged out on another device), which leaves the
+        // page's token bound to a user the request no longer has. Logging out is harmless, and cross-site
+        // posts can't log anyone out since they don't carry the SameSite=Strict cookie.
+        [IgnoreAntiforgeryToken]
         public async Task<IActionResult> Logout()
         {
-            // Revoke the session server-side too: a copy of the cookie must not stay usable.
-            _users.EndSessions(User.GetUserId());
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                // Revoke the session server-side too: a copy of the cookie must not stay usable.
+                _users.EndSessions(User.GetUserId());
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
             return RedirectToAction("Index", "Home");
         }
 
@@ -62,6 +81,7 @@ namespace ManageGames.Controllers
 
         [HttpPost]
         [AllowPendingPasswordChange]
+        [EnableRateLimiting(RateLimitPolicies.PasswordChange)]
         public async Task<IActionResult> ChangePassword(ChangePasswordViewModel form)
         {
             if (ModelState.IsValid && form.NewPassword == form.CurrentPassword)
@@ -94,6 +114,16 @@ namespace ManageGames.Controllers
         public IActionResult AccessDenied()
         {
             return View();
+        }
+
+        private IActionResult RedirectAfterLogin(string? returnUrl)
+        {
+            // Only follow local return URLs, so the login can't be abused as an open redirect.
+            if (Url.IsLocalUrl(returnUrl))
+            {
+                return LocalRedirect(returnUrl);
+            }
+            return RedirectToAction("Index", "Games");
         }
     }
 }

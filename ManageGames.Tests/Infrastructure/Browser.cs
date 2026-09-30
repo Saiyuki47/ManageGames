@@ -30,15 +30,28 @@ namespace ManageGames.Tests.Infrastructure
         public static async Task<HttpResponseMessage> SubmitFormAsync(
             this HttpClient client, string formPage, string action, IDictionary<string, string>? fields = null)
         {
+            var token = await client.GetFormTokenAsync(formPage);
+            return await client.PostFormAsync(action, token, fields);
+        }
+
+        /// <summary>The antiforgery token of the form on <paramref name="formPage"/>, as the browser got it then.</summary>
+        public static async Task<string> GetFormTokenAsync(this HttpClient client, string formPage)
+        {
             var html = await client.GetPageAsync(formPage);
             var token = AntiforgeryToken().Match(html);
             Assert.True(token.Success, $"No antiforgery token found on {formPage}.");
+            return WebUtility.HtmlDecode(token.Groups[1].Value);
+        }
 
+        /// <summary>Posts a form with a token loaded earlier, like a page that stayed open for a while.</summary>
+        public static Task<HttpResponseMessage> PostFormAsync(
+            this HttpClient client, string action, string token, IDictionary<string, string>? fields = null)
+        {
             var content = new Dictionary<string, string>(fields ?? new Dictionary<string, string>())
             {
-                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(token.Groups[1].Value),
+                ["__RequestVerificationToken"] = token,
             };
-            return await client.PostAsync(action, new FormUrlEncodedContent(content));
+            return client.PostAsync(action, new FormUrlEncodedContent(content));
         }
 
         public static Task<HttpResponseMessage> LoginAsync(this HttpClient client, string username, string password, string? returnUrl = null)

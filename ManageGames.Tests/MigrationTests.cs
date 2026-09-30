@@ -1,10 +1,12 @@
 using ManageGames.Data;
 using ManageGames.Models;
+using ManageGames.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ManageGames.Tests
 {
@@ -54,6 +56,46 @@ namespace ManageGames.Tests
                 Assert.Equal(2L, Scalar(db, "SELECT count(*) FROM tblUser"));
                 Assert.Equal(1L, Scalar(db, "SELECT count(*) FROM tblGames"));
                 Assert.Equal(legacyHash, Scalar(db, "SELECT Password FROM tblUser WHERE NormalizedUsername = 'user'"));
+            }
+        }
+
+        [Fact]
+        public void PlaintextPasswords_OfOldVersions_AreHashed_AndMustBeChanged()
+        {
+            var plaintextUserId = Guid.NewGuid().ToString().ToUpperInvariant();
+            var hashedUserId = Guid.NewGuid().ToString().ToUpperInvariant();
+            var hash = new PasswordHasher<UserModel>().HashPassword(new UserModel(), "hashed-password");
+
+            using (var db = CreateContext())
+            {
+                var migrator = db.GetService<IMigrator>();
+                migrator.Migrate(LastMigrationBeforeAccountSecurity);
+                // Versions before the EF Core rewrite stored the password itself, e.g. the seeded 'password1'.
+                db.Database.ExecuteSql($"""
+                    INSERT INTO tblUser (UserID, ProfilePicturesID, Username, NormalizedUsername, Password, IsAdmin, CookieID)
+                    VALUES ({plaintextUserId}, '00000000-0000-0000-0000-000000000000', 'user', 'user', 'password1', 1, 'StartCook'),
+                           ({hashedUserId}, '00000000-0000-0000-0000-000000000000', 'Bob', 'bob', {hash}, 0, NULL)
+                    """);
+                migrator.Migrate();
+            }
+
+            using (var db = CreateContext())
+            {
+                new UserService(db, NullLogger<UserService>.Instance).HashPlaintextPasswords();
+            }
+
+            using (var db = CreateContext())
+            {
+                var users = new UserService(db, NullLogger<UserService>.Instance);
+                var upgraded = users.ValidateCredentials("user", "password1");
+                Assert.NotNull(upgraded);
+                Assert.NotEqual("password1", upgraded.PasswordHash);
+                Assert.True(upgraded.MustChangePassword);
+
+                var untouched = users.ValidateCredentials("bob", "hashed-password");
+                Assert.NotNull(untouched);
+                Assert.Equal(hash, untouched.PasswordHash);
+                Assert.False(untouched.MustChangePassword);
             }
         }
 

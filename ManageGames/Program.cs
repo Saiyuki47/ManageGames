@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using ManageGames.Auth;
 using ManageGames.Data;
@@ -59,7 +60,7 @@ builder.Services.AddRateLimiter(options =>
     {
         context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
         return new ValueTask(context.HttpContext.Response.WriteAsync(
-            "Too many login attempts. Please wait a minute and try again.", cancellationToken));
+            "Too many attempts. Please wait a minute and try again.", cancellationToken));
     };
     options.AddPolicy(RateLimitPolicies.Login, httpContext =>
     {
@@ -69,16 +70,27 @@ builder.Services.AddRateLimiter(options =>
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = permitLimit, Window = TimeSpan.FromMinutes(1) });
     });
+    // Per user, so a hijacked session can't guess the current password to take over the account.
+    options.AddPolicy(RateLimitPolicies.PasswordChange, httpContext =>
+    {
+        var permitLimit = httpContext.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:PasswordChangePermitLimit", 10);
+        return RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = permitLimit, Window = TimeSpan.FromMinutes(1) });
+    });
 });
 
 var app = builder.Build();
 
-// Apply pending migrations (creates the database on first run) and create the first admin.
+// Apply pending migrations (creates the database on first run), hash passwords that old versions
+// stored in plaintext and create the first admin.
 using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
-    scope.ServiceProvider.GetRequiredService<UserService>()
-        .EnsureInitialAdmin(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
+    var users = scope.ServiceProvider.GetRequiredService<UserService>();
+    users.HashPlaintextPasswords();
+    users.EnsureInitialAdmin(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
 }
 
 // Configure the HTTP request pipeline.
@@ -94,8 +106,9 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseRateLimiter();
 app.UseAuthentication();
+// After authentication, so the password-change policy can partition by the signed-in user.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllerRoute(

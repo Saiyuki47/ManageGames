@@ -29,12 +29,15 @@ namespace ManageGames.Tests.Infrastructure
 
         protected virtual int LoginPermitLimit => 10_000;
 
+        protected virtual int PasswordChangePermitLimit => 10_000;
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseSetting("ConnectionStrings:ManageGames", $"Data Source={_databasePath}");
             builder.UseSetting("Seed:AdminUsername", AdminUsername);
             builder.UseSetting("Seed:AdminPassword", SeedAdminPassword ?? string.Empty);
             builder.UseSetting("RateLimiting:LoginPermitLimit", LoginPermitLimit.ToString());
+            builder.UseSetting("RateLimiting:PasswordChangePermitLimit", PasswordChangePermitLimit.ToString());
             // Keep the keys that encrypt the auth cookie in memory instead of the user profile.
             builder.ConfigureTestServices(services => services.AddDataProtection().UseEphemeralDataProtectionProvider());
         }

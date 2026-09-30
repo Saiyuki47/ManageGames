@@ -69,6 +69,34 @@ namespace ManageGames.Services
         }
 
         /// <summary>
+        /// Versions before the EF Core rewrite stored passwords in plaintext, which the hasher can't
+        /// verify (it throws on values that aren't Base64). Hashes them once; since the plaintext may
+        /// have been exposed, those users have to choose a new password and their sessions end.
+        /// </summary>
+        public void HashPlaintextPasswords()
+        {
+            var users = _db.Users
+                .AsEnumerable()
+                .Where(u => u.PasswordHash.Length > 0 && !IsPasswordHash(u.PasswordHash))
+                .ToList();
+            if (users.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var user in users)
+            {
+                user.PasswordHash = _hasher.HashPassword(user, user.PasswordHash);
+                user.MustChangePassword = true;
+                user.SecurityStamp = NewSecurityStamp();
+            }
+            _db.SaveChanges();
+            _logger.LogWarning(
+                "Hashed the plaintext passwords of {Count} user(s). They have to choose a new password at their next login.",
+                users.Count);
+        }
+
+        /// <summary>
         /// Returns the user when the password matches, otherwise null. Hashes created with older
         /// hashing parameters are upgraded on the fly.
         /// </summary>
@@ -213,6 +241,18 @@ namespace ManageGames.Services
             // New credentials end every session that was started with the old ones.
             user.SecurityStamp = NewSecurityStamp();
             _db.SaveChanges();
+        }
+
+        // PasswordHasher output is Base64 with a format marker: 0x00 for the Identity v2 format (always
+        // 49 bytes) or 0x01 for v3 (a 13-byte header followed by salt and subkey).
+        private static bool IsPasswordHash(string value)
+        {
+            var bytes = new byte[value.Length];
+            if (!Convert.TryFromBase64String(value, bytes, out var length) || length == 0)
+            {
+                return false;
+            }
+            return (bytes[0] == 0x00 && length == 49) || (bytes[0] == 0x01 && length > 13);
         }
 
         // Lower-cased with spaces removed, like the backfill in the UsernameRequiredAndUnique migration.

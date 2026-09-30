@@ -34,5 +34,17 @@ namespace ManageGames.Auth
             context.RejectPrincipal();
             await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         }
+
+        public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context)
+        {
+            // A form post whose session has ended can't be repeated: returning to its URL after the
+            // login would GET a POST-only action (405). Return to the start page instead.
+            if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
+            {
+                context.RedirectUri = context.Request.PathBase + context.Options.LoginPath
+                    + QueryString.Create(context.Options.ReturnUrlParameter, context.Request.PathBase + "/");
+            }
+            return base.RedirectToLogin(context);
+        }
     }
 }

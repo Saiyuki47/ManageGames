@@ -36,6 +36,7 @@ Settings can come from `appsettings.json`, user secrets or environment variables
 | `Seed:AdminUsername` | Name of the first admin, used only on an empty database | `admin` |
 | `Seed:AdminPassword` | Password of the first admin (no forced change) | a generated one-time password |
 | `RateLimiting:LoginPermitLimit` | Login attempts per minute and client IP | `10` |
+| `RateLimiting:PasswordChangePermitLimit` | Password change attempts per minute and user | `10` |
 
 ## Security
 
@@ -44,7 +45,7 @@ Settings can come from `appsettings.json`, user secrets or environment variables
 - Sessions are also checked on the server: logging out and changing or resetting a password rotate
   a per-user security stamp, which makes every copy of an older cookie worthless.
 - Games are scoped to their owner in every query; consoles, companies and users require the admin role.
-- All forms are protected against CSRF, login attempts are rate-limited, and passwords are stored as
+- All forms are protected against CSRF, login and password change attempts are rate-limited, and passwords are stored as
   salted PBKDF2 hashes.
 
 ## Development
