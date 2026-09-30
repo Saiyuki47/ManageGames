@@ -1,184 +1,219 @@
 using System.Net;
 using ManageGames.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
-namespace ManageGames.Tests
+namespace ManageGames.Tests;
+
+public class AuthenticationTests(ManageGamesFactory factory) : IClassFixture<ManageGamesFactory>
 {
-    public class AuthenticationTests : IClassFixture<ManageGamesFactory>
+    [Fact]
+    public async Task ProtectedPage_SendsAnonymousVisitorToLogin()
     {
-        private readonly ManageGamesFactory _factory;
+        var response = await factory.CreateBrowser().GetAsync("/Games");
 
-        public AuthenticationTests(ManageGamesFactory factory)
+        Browser.AssertRedirect(response, "/?ReturnUrl=%2FGames");
+    }
+
+    [Fact]
+    public async Task StartPage_OpensLoginForm_WhenAProtectedPageSentTheVisitor()
+    {
+        var html = await factory.CreateBrowser().GetPageAsync("/?ReturnUrl=%2FGames");
+
+        Assert.Contains("class=\"login-overlay open\"", html, StringComparison.Ordinal);
+        Assert.Contains("name=\"ReturnUrl\" value=\"/Games\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Login_WithWrongPassword_ShowsError_AndSignsNobodyIn()
+    {
+        var browser = factory.CreateBrowser();
+
+        var response = await browser.LoginAsync(ManageGamesFactory.AdminUsername, "wrong-password");
+
+        Browser.AssertRedirect(response, "/");
+        Assert.False(Browser.SetsAuthCookie(response));
+        Assert.Contains("Wrong username or password.", await browser.GetPageAsync("/"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Login_IssuesHttpOnlySecureStrictHostCookie()
+    {
+        var user = await factory.CreateUserAsync();
+
+        var response = await factory.CreateBrowser().LoginAsync(user.Username, user.Password);
+
+        var attributes = Browser.CookieAttributes(response, Browser.AuthCookieName);
+        Assert.Contains("httponly", attributes);
+        Assert.Contains("secure", attributes);
+        Assert.Contains("samesite=strict", attributes);
+        Assert.Contains("path=/", attributes);
+        // A session cookie: no expiry date, so it ends with the browser session.
+        Assert.DoesNotContain(attributes, a => a.StartsWith("expires=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Login_FollowsLocalReturnUrls_Only()
+    {
+        var user = await factory.CreateUserAsync();
+
+        var local = await factory.CreateBrowser().LoginAsync(user.Username, user.Password, returnUrl: "/Games/Wishlist");
+        var external = await factory.CreateBrowser().LoginAsync(user.Username, user.Password, returnUrl: "https://evil.example/");
+
+        Browser.AssertRedirect(local, "/Games/Wishlist");
+        Browser.AssertRedirect(external, "/Games");
+    }
+
+    [Fact]
+    public async Task Login_IgnoresCaseAndSpacesInTheUsername()
+    {
+        var user = await factory.CreateUserAsync();
+
+        var response = await factory.CreateBrowser().LoginAsync(" " + user.Username.ToUpperInvariant(), user.Password);
+
+        Browser.AssertRedirect(response, "/Games");
+    }
+
+    [Fact]
+    public async Task Login_LocksTheAccount_AfterFiveWrongPasswords()
+    {
+        var user = await factory.CreateUserAsync();
+        var browser = factory.CreateBrowser();
+        for (var attempt = 0; attempt < 5; attempt++)
         {
-            _factory = factory;
+            Browser.AssertRedirect(await browser.LoginAsync(user.Username, $"wrong-password-{attempt}"), "/");
         }
 
-        [Fact]
-        public async Task ProtectedPage_SendsAnonymousVisitorToLogin()
+        // Even the right password is refused now, with the same message as a wrong one.
+        var response = await browser.LoginAsync(user.Username, user.Password);
+
+        Browser.AssertRedirect(response, "/");
+        Assert.False(Browser.SetsAuthCookie(response));
+        Assert.Contains("an account is locked for a few minutes", await browser.GetPageAsync("/"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Logout_EndsOnlyThisDevice_AndRevokesItsCookieOnTheServer()
+    {
+        var user = await factory.CreateUserAsync();
+        var laptop = factory.CreateBrowser();
+        var copiedCookie = Browser.GetAuthCookie(await laptop.LoginAsync(user.Username, user.Password));
+        var phone = await factory.SignInAsync(user);
+        var replay = factory.CreateBrowser(handleCookies: false);
+        replay.DefaultRequestHeaders.Add("Cookie", copiedCookie);
+        Assert.Equal(HttpStatusCode.OK, (await replay.GetAsync("/Games")).StatusCode);
+
+        Browser.AssertRedirect(await laptop.LogoutAsync(), "/");
+
+        // A copy of the laptop's cookie taken before the logout is worthless afterwards...
+        Browser.AssertRedirect(await replay.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
+        Browser.AssertRedirect(await laptop.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
+        // ...while the phone stays signed in.
+        Assert.Equal(HttpStatusCode.OK, (await phone.GetAsync("/Games")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Session_EndsAtItsAbsoluteLifetime_EvenWhenActive()
+    {
+        var user = await factory.CreateUserAsync();
+        var browser = await factory.SignInAsync(user);
+        var userId = factory.UserId(user.Username);
+
+        factory.Query(db => db.UserSessions.Where(s => s.UserId == userId)
+            .ExecuteUpdate(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddMinutes(-1))));
+
+        Browser.AssertRedirect(await browser.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
+    }
+
+    [Fact]
+    public async Task Logout_WorksAfterTheSessionEndedElsewhere()
+    {
+        var user = await factory.CreateUserAsync();
+        var phone = await factory.SignInAsync(user);
+        var phoneToken = await phone.GetFormTokenAsync("/Games");
+
+        // E.g. a password change on another device ended the phone's session; its page still shows "Log out".
+        factory.EndSessions(user.Username);
+
+        Browser.AssertRedirect(await phone.PostFormAsync("/Account/Logout", phoneToken), "/");
+    }
+
+    [Fact]
+    public async Task FormPost_AfterTheSessionEnded_ReturnsToTheStartPage_NotToThePostOnlyAction()
+    {
+        var user = await factory.CreateUserAsync();
+        var browser = await factory.SignInAsync(user);
+        var token = await browser.GetFormTokenAsync("/Games/Create");
+        factory.EndSessions(user.Username);
+
+        var response = await browser.PostFormAsync("/Games/Create", token, new Dictionary<string, string>
         {
-            var response = await _factory.CreateBrowser().GetAsync("/Games");
+            ["Name"] = ManageGamesFactory.Unique("Late"),
+            ["Copies"] = "1",
+        });
 
-            Browser.AssertRedirect(response, "/?ReturnUrl=%2FGames");
-        }
+        Browser.AssertRedirect(response, "/?ReturnUrl=%2F");
+    }
 
-        [Fact]
-        public async Task StartPage_OpensLoginForm_WhenAProtectedPageSentTheVisitor()
+    [Fact]
+    public async Task Login_FromAFormLoadedBeforeSigningIn_KeepsTheExistingSession()
+    {
+        var user = await factory.CreateUserAsync();
+        var browser = factory.CreateBrowser();
+        // A second tab, loaded anonymously before the user signed in in the first one.
+        var staleToken = await browser.GetFormTokenAsync("/Home/Privacy");
+        Browser.AssertRedirect(await browser.LoginAsync(user.Username, user.Password), "/Games");
+
+        var response = await browser.PostFormAsync("/Account/Login", staleToken, new Dictionary<string, string>
         {
-            var html = await _factory.CreateBrowser().GetPageAsync("/?ReturnUrl=%2FGames");
+            ["Username"] = user.Username,
+            ["Password"] = user.Password,
+            ["ReturnUrl"] = "/Games/Wishlist",
+        });
 
-            Assert.Contains("class=\"login-overlay open\"", html);
-            Assert.Contains("name=\"ReturnUrl\" value=\"/Games\"", html);
-        }
+        Browser.AssertRedirect(response, "/Games/Wishlist");
+    }
 
-        [Fact]
-        public async Task Login_WithWrongPassword_ShowsError_AndSignsNobodyIn()
+    [Fact]
+    public async Task Login_WithoutAntiforgeryToken_IsRejected()
+    {
+        var user = await factory.CreateUserAsync();
+
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            var browser = _factory.CreateBrowser();
+            ["Username"] = user.Username,
+            ["Password"] = user.Password,
+        });
+        var response = await factory.CreateBrowser().PostAsync(new Uri("/Account/Login", UriKind.Relative), form);
 
-            var response = await browser.LoginAsync(ManageGamesFactory.AdminUsername, "wrong-password");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(Browser.SetsAuthCookie(response));
+    }
 
-            Browser.AssertRedirect(response, "/");
-            response.Headers.TryGetValues("Set-Cookie", out var cookies);
-            Assert.DoesNotContain(cookies ?? [], c => c.StartsWith(Browser.AuthCookieName + "="));
-            Assert.Contains("Wrong username or password.", await browser.GetPageAsync("/"));
-        }
+    [Fact]
+    public async Task TamperedAuthCookie_IsTreatedAsAnonymous()
+    {
+        var browser = factory.CreateBrowser(handleCookies: false);
+        browser.DefaultRequestHeaders.Add("Cookie", Browser.AuthCookieName + "=not-a-valid-ticket");
 
-        [Fact]
-        public async Task Login_IssuesHttpOnlySecureStrictCookie()
+        var response = await browser.GetAsync("/Games");
+
+        Browser.AssertRedirect(response, "/?ReturnUrl=%2FGames");
+    }
+
+    [Fact]
+    public async Task Post_WithoutAntiforgeryToken_IsRejected()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var name = ManageGamesFactory.Unique("Forged");
+
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            var user = _factory.CreateUser();
+            ["Name"] = name,
+            ["Copies"] = "1",
+        });
+        var response = await browser.PostAsync(new Uri("/Games/Create", UriKind.Relative), form);
 
-            var response = await _factory.CreateBrowser().LoginAsync(user.Username, user.Password);
-
-            var attributes = response.Headers.GetValues("Set-Cookie")
-                .Single(c => c.StartsWith(Browser.AuthCookieName + "="))
-                .Split(';')
-                .Select(a => a.Trim().ToLowerInvariant())
-                .ToList();
-            Assert.Contains("httponly", attributes);
-            Assert.Contains("secure", attributes);
-            Assert.Contains("samesite=strict", attributes);
-        }
-
-        [Fact]
-        public async Task Login_FollowsLocalReturnUrls_Only()
-        {
-            var user = _factory.CreateUser();
-
-            var local = await _factory.CreateBrowser().LoginAsync(user.Username, user.Password, returnUrl: "/Games/Wishlist");
-            var external = await _factory.CreateBrowser().LoginAsync(user.Username, user.Password, returnUrl: "https://evil.example/");
-
-            Browser.AssertRedirect(local, "/Games/Wishlist");
-            Browser.AssertRedirect(external, "/Games");
-        }
-
-        [Fact]
-        public async Task Logout_RevokesTheSessionOnTheServer()
-        {
-            var user = _factory.CreateUser();
-            var browser = _factory.CreateBrowser();
-            var copiedCookie = Browser.GetAuthCookie(await browser.LoginAsync(user.Username, user.Password));
-            var replay = _factory.CreateBrowser(handleCookies: false);
-            replay.DefaultRequestHeaders.Add("Cookie", copiedCookie);
-            Assert.Equal(HttpStatusCode.OK, (await replay.GetAsync("/Games")).StatusCode);
-
-            Browser.AssertRedirect(await browser.LogoutAsync(), "/");
-
-            // A copy of the cookie taken before the logout must be worthless afterwards.
-            Browser.AssertRedirect(await replay.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
-            Browser.AssertRedirect(await browser.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
-        }
-
-        [Fact]
-        public async Task Logout_WorksAfterTheSessionEndedElsewhere()
-        {
-            var user = _factory.CreateUser();
-            var laptop = await _factory.SignInAsync(user);
-            var phone = await _factory.SignInAsync(user);
-            var phoneToken = await phone.GetFormTokenAsync("/Games");
-
-            // Logging out on the laptop ends the phone's session too; its page still shows "Log out".
-            Browser.AssertRedirect(await laptop.LogoutAsync(), "/");
-
-            Browser.AssertRedirect(await phone.PostFormAsync("/Account/Logout", phoneToken), "/");
-        }
-
-        [Fact]
-        public async Task FormPost_AfterTheSessionEnded_ReturnsToTheStartPage_NotToThePostOnlyAction()
-        {
-            var user = _factory.CreateUser();
-            var browser = await _factory.SignInAsync(user);
-            var token = await browser.GetFormTokenAsync("/Games/Create");
-            await (await _factory.SignInAsync(user)).LogoutAsync();
-
-            var response = await browser.PostFormAsync("/Games/Create", token, new Dictionary<string, string>
-            {
-                ["Name"] = ManageGamesFactory.Unique("Late"),
-                ["Copies"] = "1",
-            });
-
-            Browser.AssertRedirect(response, "/?ReturnUrl=%2F");
-        }
-
-        [Fact]
-        public async Task Login_FromAFormLoadedBeforeSigningIn_KeepsTheExistingSession()
-        {
-            var user = _factory.CreateUser();
-            var browser = _factory.CreateBrowser();
-            // A second tab, loaded anonymously before the user signed in in the first one.
-            var staleToken = await browser.GetFormTokenAsync("/Home/Privacy");
-            Browser.AssertRedirect(await browser.LoginAsync(user.Username, user.Password), "/Games");
-
-            var response = await browser.PostFormAsync("/Account/Login", staleToken, new Dictionary<string, string>
-            {
-                ["Username"] = user.Username,
-                ["Password"] = user.Password,
-                ["ReturnUrl"] = "/Games/Wishlist",
-            });
-
-            Browser.AssertRedirect(response, "/Games/Wishlist");
-        }
-
-        [Fact]
-        public async Task Login_WithoutAntiforgeryToken_IsRejected()
-        {
-            var user = _factory.CreateUser();
-
-            var response = await _factory.CreateBrowser().PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["Username"] = user.Username,
-                ["Password"] = user.Password,
-            }));
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            response.Headers.TryGetValues("Set-Cookie", out var cookies);
-            Assert.DoesNotContain(cookies ?? [], c => c.StartsWith(Browser.AuthCookieName + "="));
-        }
-
-        [Fact]
-        public async Task TamperedAuthCookie_IsTreatedAsAnonymous()
-        {
-            var browser = _factory.CreateBrowser(handleCookies: false);
-            browser.DefaultRequestHeaders.Add("Cookie", Browser.AuthCookieName + "=not-a-valid-ticket");
-
-            var response = await browser.GetAsync("/Games");
-
-            Browser.AssertRedirect(response, "/?ReturnUrl=%2FGames");
-        }
-
-        [Fact]
-        public async Task Post_WithoutAntiforgeryToken_IsRejected()
-        {
-            var browser = await _factory.SignInAsync(_factory.CreateUser());
-            var name = ManageGamesFactory.Unique("Forged");
-
-            var response = await browser.PostAsync("/Games/Create", new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["Name"] = name,
-                ["Copies"] = "1",
-            }));
-
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-            Assert.False(_factory.Query(db => db.Games.Any(g => g.GameName == name)));
-        }
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(factory.Query(db => db.Games.Any(g => g.Name == name)));
     }
 }

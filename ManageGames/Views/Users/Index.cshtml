@@ -22,19 +22,19 @@
     <tbody>
         @foreach (var user in Model.Users)
         {
-            var isSelf = user.UserID == Model.CurrentUserId;
+            var isSelf = user.Id == Model.CurrentUserId;
             <tr>
-                <td>@user.Username @(isSelf ? "(you)" : "")</td>
+                <td>@user.UserName @(isSelf ? "(you)" : "")</td>
                 <td>@(user.IsAdmin ? "Admin" : "User")</td>
                 <td>@(user.MustChangePassword ? "Must be changed" : "Chosen by the user")</td>
-                <td>@user.CreatedAt.ToString("yyyy-MM-dd")</td>
+                <td>@user.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
                 <td>
                     @if (!isSelf)
                     {
                         <div class="row-actions">
-                            <a class="button-link" asp-action="ResetPassword" asp-route-id="@user.UserID">Reset password</a>
-                            <form asp-action="Delete" asp-route-id="@user.UserID" method="post"
-                                  data-confirm="Delete the user &quot;@user.Username&quot; and all of their games?">
+                            <a class="button-link" asp-action="ResetPassword" asp-route-id="@user.Id">Reset password</a>
+                            <form asp-action="Delete" asp-route-id="@user.Id" method="post"
+                                  data-confirm="Delete the user &quot;@user.UserName&quot; and all of their games?">
                                 <button type="submit">Delete</button>
                             </form>
                         </div>

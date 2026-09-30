@@ -9,8 +9,8 @@
 </p>
 <p>The app only sets the cookies it needs to work:</p>
 <ul>
-    <li><code>ManageGames.Auth</code> keeps you signed in. It ends when you log out, usually when you close the browser, and after two hours without activity.</li>
-    <li>An antiforgery cookie protects the forms against cross-site request forgery.</li>
-    <li>A short-lived message cookie carries one-time notices, such as a failed login, to the next page.</li>
+    <li><code>__Host-ManageGames.Auth</code> keeps you signed in on this device. It ends when you log out, usually when you close the browser, after two hours without activity and at the latest after twelve hours.</li>
+    <li><code>__Host-ManageGames.Antiforgery</code> protects the forms against cross-site request forgery.</li>
+    <li><code>__Host-ManageGames.TempData</code> carries one-time notices, such as a failed login, to the next page.</li>
 </ul>
-<p>Passwords are stored only as salted hashes.</p>
+<p>Passwords are stored only as salted hashes (PBKDF2).</p>

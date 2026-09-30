@@ -1,73 +1,67 @@
 using ManageGames.Data;
+using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace ManageGames.Services
+namespace ManageGames.Services;
+
+/// <summary>
+/// Companies (console makers) are shared by all users. Only admins may change them, which the
+/// controller enforces.
+/// </summary>
+public class CompanyService(AppDbContext db)
 {
-    /// <summary>
-    /// Companies (console makers) are shared by all users. Only admins may change them, which the
-    /// controller enforces.
-    /// </summary>
-    public class CompanyService
+    public List<Company> GetCompanies()
     {
-        private readonly AppDbContext _db;
+        return db.Companies
+            .AsNoTracking()
+            .AsEnumerable()
+            .OrderBy(c => c.Name, NameOrder.Comparer)
+            .ToList();
+    }
 
-        public CompanyService(AppDbContext db)
+    public Company? GetCompany(int id)
+    {
+        return db.Companies
+            .AsNoTracking()
+            .FirstOrDefault(c => c.Id == id);
+    }
+
+    public void AddCompany(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        db.Companies.Add(new Company { Name = name.Trim() });
+        db.SaveChanges();
+    }
+
+    public bool UpdateCompany(int id, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var company = db.Companies.Find(id);
+        if (company == null)
         {
-            _db = db;
+            return false;
         }
 
-        public List<CompanyModel> GetCompanies()
+        company.Name = name.Trim();
+        db.SaveChanges();
+        return true;
+    }
+
+    public bool DeleteCompany(int id)
+    {
+        var company = db.Companies.Find(id);
+        if (company == null)
         {
-            return _db.Companies
-                .OrderBy(c => EF.Functions.Collate(c.CompanyName, "NOCASE"))
-                .AsNoTracking()
-                .ToList();
+            return false;
         }
 
-        public CompanyModel? GetCompany(int id)
-        {
-            return _db.Companies
-                .AsNoTracking()
-                .FirstOrDefault(c => c.CompanyId == id);
-        }
-
-        public void AddCompany(string name)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-            _db.Companies.Add(new CompanyModel { CompanyName = name.Trim() });
-            _db.SaveChanges();
-        }
-
-        public bool UpdateCompany(int id, string name)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-            var company = _db.Companies.Find(id);
-            if (company == null)
-            {
-                return false;
-            }
-
-            company.CompanyName = name.Trim();
-            _db.SaveChanges();
-            return true;
-        }
-
-        public bool DeleteCompany(int id)
-        {
-            var company = _db.Companies.Find(id);
-            if (company == null)
-            {
-                return false;
-            }
-
-            // Consoles made by this company keep existing: the database sets their CompanyId to
-            // NULL (ON DELETE SET NULL).
-            _db.Companies.Remove(company);
-            _db.SaveChanges();
-            return true;
-        }
+        // Consoles made by this company keep existing: the database sets their CompanyId to
+        // NULL (ON DELETE SET NULL).
+        db.Companies.Remove(company);
+        db.SaveChanges();
+        return true;
     }
 }

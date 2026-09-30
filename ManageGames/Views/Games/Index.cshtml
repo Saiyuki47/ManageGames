@@ -29,13 +29,13 @@ else
             @foreach (var game in Model.Games)
             {
                 <tr>
-                    <td>@game.GameName</td>
-                    <td>@(game.Console?.ConsoleName ?? "-")</td>
+                    <td>@game.Name</td>
+                    <td>@(game.Console?.Name ?? "-")</td>
                     <td class="numeric">@game.Copies</td>
                     <td>
                         <div class="row-actions">
-                            <a class="button-link" asp-action="Edit" asp-route-id="@game.GameId">Edit</a>
-                            <form asp-action="Delete" asp-route-id="@game.GameId" method="post" data-confirm="Delete &quot;@game.GameName&quot;?">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@game.Id">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@game.Id" method="post" data-confirm="Delete &quot;@game.Name&quot;?">
                                 <button type="submit">Delete</button>
                             </form>
                         </div>

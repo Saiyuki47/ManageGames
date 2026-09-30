@@ -5,81 +5,73 @@ using ManageGames.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace ManageGames.Controllers
+namespace ManageGames.Controllers;
+
+/// <summary>Companies are shared by all users, so only admins may manage them.</summary>
+[Authorize(Roles = Roles.Admin)]
+public class CompaniesController(CompanyService companies) : Controller
 {
-    /// <summary>Companies are shared by all users, so only admins may manage them.</summary>
-    [Authorize(Roles = Roles.Admin)]
-    public class CompaniesController : Controller
+    public IActionResult Index(string? search)
     {
-        private readonly CompanyService _companies;
-
-        public CompaniesController(CompanyService companies)
+        return View(new CompanyListViewModel
         {
-            _companies = companies;
+            Companies = SearchFilter.Filter(companies.GetCompanies(), search, c => c.Name),
+            Search = search,
+        });
+    }
+
+    [HttpGet]
+    public IActionResult Create()
+    {
+        return View("Edit", new CompanyFormViewModel());
+    }
+
+    [HttpPost]
+    public IActionResult Create(CompanyFormViewModel form)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View("Edit", form);
         }
 
-        public IActionResult Index(string? search)
+        companies.AddCompany(form.Name);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpGet]
+    public IActionResult Edit(int id)
+    {
+        var company = companies.GetCompany(id);
+        if (company == null)
         {
-            return View(new CompanyListViewModel
-            {
-                Companies = SearchFilter.Filter(_companies.GetCompanies(), search, c => c.CompanyName),
-                Search = search,
-            });
+            return NotFound();
         }
 
-        [HttpGet]
-        public IActionResult Create()
+        return View(new CompanyFormViewModel { Id = company.Id, Name = company.Name });
+    }
+
+    [HttpPost]
+    public IActionResult Edit(int id, CompanyFormViewModel form)
+    {
+        if (!ModelState.IsValid)
         {
-            return View("Edit", new CompanyFormViewModel());
+            return View(form);
         }
 
-        [HttpPost]
-        public IActionResult Create(CompanyFormViewModel form)
+        if (!companies.UpdateCompany(id, form.Name))
         {
-            if (!ModelState.IsValid)
-            {
-                return View("Edit", form);
-            }
-
-            _companies.AddCompany(form.Name);
-            return RedirectToAction(nameof(Index));
+            return NotFound();
         }
+        return RedirectToAction(nameof(Index));
+    }
 
-        [HttpGet]
-        public IActionResult Edit(int id)
+    [HttpPost]
+    public IActionResult Delete(int id)
+    {
+        if (!companies.DeleteCompany(id))
         {
-            var company = _companies.GetCompany(id);
-            if (company == null)
-            {
-                return NotFound();
-            }
-
-            return View(new CompanyFormViewModel { Id = company.CompanyId, Name = company.CompanyName });
+            return NotFound();
         }
-
-        [HttpPost]
-        public IActionResult Edit(int id, CompanyFormViewModel form)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(form);
-            }
-
-            if (!_companies.UpdateCompany(id, form.Name))
-            {
-                return NotFound();
-            }
-            return RedirectToAction(nameof(Index));
-        }
-
-        [HttpPost]
-        public IActionResult Delete(int id)
-        {
-            if (!_companies.DeleteCompany(id))
-            {
-                return NotFound();
-            }
-            return RedirectToAction(nameof(Index));
-        }
+        return RedirectToAction(nameof(Index));
     }
 }

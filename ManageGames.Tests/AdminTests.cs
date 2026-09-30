@@ -1,76 +1,69 @@
+using System.Globalization;
 using ManageGames.Tests.Infrastructure;
 
-namespace ManageGames.Tests
+namespace ManageGames.Tests;
+
+public class AdminTests(ManageGamesFactory factory) : IClassFixture<ManageGamesFactory>
 {
-    public class AdminTests : IClassFixture<ManageGamesFactory>
+    [Theory]
+    [InlineData("/Consoles")]
+    [InlineData("/Companies")]
+    [InlineData("/Users")]
+    public async Task NonAdmin_IsDeniedTheAdminPages(string page)
     {
-        private readonly ManageGamesFactory _factory;
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
 
-        public AdminTests(ManageGamesFactory factory)
-        {
-            _factory = factory;
-        }
+        var response = await browser.GetAsync(page);
 
-        [Theory]
-        [InlineData("/Consoles")]
-        [InlineData("/Companies")]
-        [InlineData("/Users")]
-        public async Task NonAdmin_IsDeniedTheAdminPages(string page)
-        {
-            var browser = await _factory.SignInAsync(_factory.CreateUser());
+        Browser.AssertRedirect(response, "/Account/AccessDenied?ReturnUrl=" + Uri.EscapeDataString(page));
+    }
 
-            var response = await browser.GetAsync(page);
+    [Fact]
+    public async Task NonAdmin_CannotCreateSharedData()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var name = ManageGamesFactory.Unique("Forbidden");
 
-            Browser.AssertRedirect(response, "/Account/AccessDenied?ReturnUrl=" + Uri.EscapeDataString(page));
-        }
+        var response = await browser.SubmitFormAsync("/Games", "/Consoles/Create", new Dictionary<string, string> { ["Name"] = name });
 
-        [Fact]
-        public async Task NonAdmin_CannotCreateSharedData()
-        {
-            var browser = await _factory.SignInAsync(_factory.CreateUser());
-            var name = ManageGamesFactory.Unique("Forbidden");
+        Browser.AssertRedirect(response, "/Account/AccessDenied?ReturnUrl=%2FConsoles%2FCreate");
+        Assert.False(factory.Query(db => db.Consoles.Any(c => c.Name == name)));
+    }
 
-            var response = await browser.SubmitFormAsync("/Games", "/Consoles/Create", new Dictionary<string, string> { ["Name"] = name });
+    [Fact]
+    public async Task Navigation_ShowsAdminLinks_ToAdminsOnly()
+    {
+        var user = await factory.SignInAsync(await factory.CreateUserAsync());
+        var admin = await factory.SignInAsAdminAsync();
 
-            Browser.AssertRedirect(response, "/Account/AccessDenied?ReturnUrl=%2FConsoles%2FCreate");
-            Assert.False(_factory.Query(db => db.Consoles.Any(c => c.ConsoleName == name)));
-        }
+        Assert.DoesNotContain("href=\"/Consoles\"", await user.GetPageAsync("/Games"));
+        Assert.Contains("href=\"/Consoles\"", await admin.GetPageAsync("/Games"));
+    }
 
-        [Fact]
-        public async Task Navigation_ShowsAdminLinks_ToAdminsOnly()
-        {
-            var user = await _factory.SignInAsync(_factory.CreateUser());
-            var admin = await _factory.SignInAsAdminAsync();
+    [Fact]
+    public async Task Admin_ManagesCompaniesAndConsoles_WithoutLosingGames()
+    {
+        var admin = await factory.SignInAsAdminAsync();
+        var companyName = ManageGamesFactory.Unique("Nintendo");
+        var consoleName = ManageGamesFactory.Unique("Switch");
+        var gameName = ManageGamesFactory.Unique("Mario");
 
-            Assert.DoesNotContain("href=\"/Consoles\"", await user.GetPageAsync("/Games"));
-            Assert.Contains("href=\"/Consoles\"", await admin.GetPageAsync("/Games"));
-        }
+        Browser.AssertRedirect(await admin.SubmitFormAsync("/Companies/Create", "/Companies/Create",
+            new Dictionary<string, string> { ["Name"] = companyName }), "/Companies");
+        var companyId = factory.Query(db => db.Companies.Single(c => c.Name == companyName).Id);
 
-        [Fact]
-        public async Task Admin_ManagesCompaniesAndConsoles_WithoutLosingGames()
-        {
-            var admin = await _factory.SignInAsAdminAsync();
-            var companyName = ManageGamesFactory.Unique("Nintendo");
-            var consoleName = ManageGamesFactory.Unique("Switch");
-            var gameName = ManageGamesFactory.Unique("Mario");
+        Browser.AssertRedirect(await admin.SubmitFormAsync("/Consoles/Create", "/Consoles/Create",
+            new Dictionary<string, string> { ["Name"] = consoleName, ["CompanyId"] = companyId.ToString(CultureInfo.InvariantCulture) }), "/Consoles");
+        var consoleId = factory.Query(db => db.Consoles.Single(c => c.Name == consoleName).Id);
+        Assert.Contains(companyName, await admin.GetPageAsync("/Consoles"));
 
-            Browser.AssertRedirect(await admin.SubmitFormAsync("/Companies/Create", "/Companies/Create",
-                new Dictionary<string, string> { ["Name"] = companyName }), "/Companies");
-            var companyId = _factory.Query(db => db.Companies.Single(c => c.CompanyName == companyName).CompanyId);
+        await admin.AddGameAsync(gameName, consoleId: consoleId);
 
-            Browser.AssertRedirect(await admin.SubmitFormAsync("/Consoles/Create", "/Consoles/Create",
-                new Dictionary<string, string> { ["Name"] = consoleName, ["CompanyId"] = companyId.ToString() }), "/Consoles");
-            var consoleId = _factory.Query(db => db.Consoles.Single(c => c.ConsoleName == consoleName).ConsoleId);
-            Assert.Contains(companyName, await admin.GetPageAsync("/Consoles"));
+        // Deleting the company keeps its console; deleting the console keeps its games.
+        Browser.AssertRedirect(await admin.SubmitFormAsync("/Companies", $"/Companies/Delete/{companyId}"), "/Companies");
+        Assert.Null(factory.Query(db => db.Consoles.Single(c => c.Id == consoleId).CompanyId));
 
-            await admin.AddGameAsync(gameName, consoleId: consoleId);
-
-            // Deleting the company keeps its console; deleting the console keeps its games.
-            Browser.AssertRedirect(await admin.SubmitFormAsync("/Companies", $"/Companies/Delete/{companyId}"), "/Companies");
-            Assert.Null(_factory.Query(db => db.Consoles.Single(c => c.ConsoleId == consoleId).CompanyId));
-
-            Browser.AssertRedirect(await admin.SubmitFormAsync("/Consoles", $"/Consoles/Delete/{consoleId}"), "/Consoles");
-            Assert.Null(_factory.Query(db => db.Games.Single(g => g.GameName == gameName).ConsoleId));
-        }
+        Browser.AssertRedirect(await admin.SubmitFormAsync("/Consoles", $"/Consoles/Delete/{consoleId}"), "/Consoles");
+        Assert.Null(factory.Query(db => db.Games.Single(g => g.Name == gameName).ConsoleId));
     }
 }

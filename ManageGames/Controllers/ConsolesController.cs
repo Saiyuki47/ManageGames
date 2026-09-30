@@ -1,3 +1,4 @@
+using System.Globalization;
 using ManageGames.Auth;
 using ManageGames.Helpers;
 using ManageGames.Services;
@@ -6,91 +7,81 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
-namespace ManageGames.Controllers
+namespace ManageGames.Controllers;
+
+/// <summary>Consoles are shared by all users, so only admins may manage them.</summary>
+[Authorize(Roles = Roles.Admin)]
+public class ConsolesController(ConsoleService consoles, CompanyService companies) : Controller
 {
-    /// <summary>Consoles are shared by all users, so only admins may manage them.</summary>
-    [Authorize(Roles = Roles.Admin)]
-    public class ConsolesController : Controller
+    public IActionResult Index(string? search)
     {
-        private readonly ConsoleService _consoles;
-        private readonly CompanyService _companies;
-
-        public ConsolesController(ConsoleService consoles, CompanyService companies)
+        return View(new ConsoleListViewModel
         {
-            _consoles = consoles;
-            _companies = companies;
+            Consoles = SearchFilter.Filter(consoles.GetConsoles(), search, c => c.Name),
+            Search = search,
+        });
+    }
+
+    [HttpGet]
+    public IActionResult Create()
+    {
+        return EditView(new ConsoleFormViewModel());
+    }
+
+    [HttpPost]
+    public IActionResult Create(ConsoleFormViewModel form)
+    {
+        if (!ModelState.IsValid)
+        {
+            return EditView(form);
         }
 
-        public IActionResult Index(string? search)
+        consoles.AddConsole(form.Name, form.CompanyId);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpGet]
+    public IActionResult Edit(int id)
+    {
+        var console = consoles.GetConsole(id);
+        if (console == null)
         {
-            return View(new ConsoleListViewModel
-            {
-                Consoles = SearchFilter.Filter(_consoles.GetConsoles(), search, c => c.ConsoleName),
-                Search = search,
-            });
+            return NotFound();
         }
 
-        [HttpGet]
-        public IActionResult Create()
+        return EditView(new ConsoleFormViewModel { Id = console.Id, Name = console.Name, CompanyId = console.CompanyId });
+    }
+
+    [HttpPost]
+    public IActionResult Edit(int id, ConsoleFormViewModel form)
+    {
+        if (!ModelState.IsValid)
         {
-            return EditView(new ConsoleFormViewModel());
+            return EditView(form);
         }
 
-        [HttpPost]
-        public IActionResult Create(ConsoleFormViewModel form)
+        if (!consoles.UpdateConsole(id, form.Name, form.CompanyId))
         {
-            if (!ModelState.IsValid)
-            {
-                return EditView(form);
-            }
-
-            _consoles.AddConsole(form.Name, form.CompanyId);
-            return RedirectToAction(nameof(Index));
+            return NotFound();
         }
+        return RedirectToAction(nameof(Index));
+    }
 
-        [HttpGet]
-        public IActionResult Edit(int id)
+    [HttpPost]
+    public IActionResult Delete(int id)
+    {
+        if (!consoles.DeleteConsole(id))
         {
-            var console = _consoles.GetConsole(id);
-            if (console == null)
-            {
-                return NotFound();
-            }
-
-            return EditView(new ConsoleFormViewModel { Id = console.ConsoleId, Name = console.ConsoleName, CompanyId = console.CompanyId });
+            return NotFound();
         }
+        return RedirectToAction(nameof(Index));
+    }
 
-        [HttpPost]
-        public IActionResult Edit(int id, ConsoleFormViewModel form)
-        {
-            if (!ModelState.IsValid)
-            {
-                return EditView(form);
-            }
-
-            if (!_consoles.UpdateConsole(id, form.Name, form.CompanyId))
-            {
-                return NotFound();
-            }
-            return RedirectToAction(nameof(Index));
-        }
-
-        [HttpPost]
-        public IActionResult Delete(int id)
-        {
-            if (!_consoles.DeleteConsole(id))
-            {
-                return NotFound();
-            }
-            return RedirectToAction(nameof(Index));
-        }
-
-        private IActionResult EditView(ConsoleFormViewModel form)
-        {
-            form.CompanyOptions = _companies.GetCompanies()
-                .Select(c => new SelectListItem(c.CompanyName, c.CompanyId.ToString()))
-                .ToList();
-            return View("Edit", form);
-        }
+    private ViewResult EditView(ConsoleFormViewModel form)
+    {
+        form.CompanyOptions = companies.GetCompanies()
+            .Select(c => new SelectListItem(c.Name, c.Id.ToString(CultureInfo.InvariantCulture)))
+            .ToList();
+        return View("Edit", form);
     }
 }

@@ -4,33 +4,41 @@ using ManageGames.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace ManageGames.Controllers
+namespace ManageGames.Controllers;
+
+/// <summary>The public pages. Everything else requires a signed-in user.</summary>
+[AllowAnonymous]
+public class HomeController : Controller
 {
-    /// <summary>The public pages. Everything else requires a signed-in user.</summary>
-    [AllowAnonymous]
-    public class HomeController : Controller
+    // The start page hosts the login form; signed-in users go straight to their games.
+    public IActionResult Index()
     {
-        // The start page hosts the login form; signed-in users go straight to their games.
-        public IActionResult Index()
+        if (User.Identity?.IsAuthenticated == true)
         {
-            if (User.Identity?.IsAuthenticated == true)
-            {
-                return RedirectToAction("Index", "Games");
-            }
-            return View();
+            return RedirectToAction("Index", "Games");
         }
+        return View();
+    }
 
-        public IActionResult Privacy()
-        {
-            return View();
-        }
+    public IActionResult Privacy()
+    {
+        return View();
+    }
 
-        [AllowPendingPasswordChange]
-        [IgnoreAntiforgeryToken]
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
+    // Friendly page for error status codes without a body (404 and the like), re-executed by the
+    // status code pages middleware with the original method, hence the ignored antiforgery token.
+    [AllowPendingPasswordChange]
+    [IgnoreAntiforgeryToken]
+    public IActionResult HttpStatus(int code)
+    {
+        return View(code);
+    }
+
+    [AllowPendingPasswordChange]
+    [IgnoreAntiforgeryToken]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult Error()
+    {
+        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 }

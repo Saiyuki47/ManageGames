@@ -1,3 +1,4 @@
+using System.Globalization;
 using ManageGames.Auth;
 using ManageGames.Helpers;
 using ManageGames.Services;
@@ -6,116 +7,106 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
-namespace ManageGames.Controllers
+namespace ManageGames.Controllers;
+
+/// <summary>The signed-in user's own game collection and wishlist.</summary>
+[Authorize]
+public class GamesController(GameService games, ConsoleService consoles) : Controller
 {
-    /// <summary>The signed-in user's own game collection and wishlist.</summary>
-    [Authorize]
-    public class GamesController : Controller
+    public IActionResult Index(string? search)
     {
-        private readonly GameService _games;
-        private readonly ConsoleService _consoles;
+        return List(onWishList: false, search);
+    }
 
-        public GamesController(GameService games, ConsoleService consoles)
+    public IActionResult Wishlist(string? search)
+    {
+        return List(onWishList: true, search);
+    }
+
+    [HttpGet]
+    public IActionResult Create(bool wishlist = false)
+    {
+        return EditView(new GameFormViewModel { OnWishList = wishlist });
+    }
+
+    [HttpPost]
+    public IActionResult Create(GameFormViewModel form)
+    {
+        if (!ModelState.IsValid)
         {
-            _games = games;
-            _consoles = consoles;
+            return EditView(form);
         }
 
-        public IActionResult Index(string? search)
+        games.AddGame(User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList);
+        return RedirectToList(form.OnWishList);
+    }
+
+    [HttpGet]
+    public IActionResult Edit(int id)
+    {
+        var game = games.GetGame(id, User.GetUserId());
+        if (game == null)
         {
-            return List(onWishList: false, search);
+            return NotFound();
         }
 
-        public IActionResult Wishlist(string? search)
+        return EditView(new GameFormViewModel
         {
-            return List(onWishList: true, search);
+            Id = game.Id,
+            Name = game.Name,
+            ConsoleId = game.ConsoleId,
+            Copies = game.Copies,
+            OnWishList = game.IsOnWishList,
+        });
+    }
+
+    [HttpPost]
+    public IActionResult Edit(int id, GameFormViewModel form)
+    {
+        if (!ModelState.IsValid)
+        {
+            return EditView(form);
         }
 
-        [HttpGet]
-        public IActionResult Create(bool wishlist = false)
+        if (!games.UpdateGame(id, User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList))
         {
-            return EditView(new GameFormViewModel { OnWishList = wishlist });
+            return NotFound();
         }
+        return RedirectToList(form.OnWishList);
+    }
 
-        [HttpPost]
-        public IActionResult Create(GameFormViewModel form)
+    [HttpPost]
+    public IActionResult Delete(int id)
+    {
+        var game = games.DeleteGame(id, User.GetUserId());
+        if (game == null)
         {
-            if (!ModelState.IsValid)
-            {
-                return EditView(form);
-            }
-
-            _games.AddGame(User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList);
-            return RedirectToList(form.OnWishList);
+            return NotFound();
         }
+        return RedirectToList(game.IsOnWishList);
+    }
 
-        [HttpGet]
-        public IActionResult Edit(int id)
+    private ViewResult List(bool onWishList, string? search)
+    {
+        var ownGames = games.GetGames(User.GetUserId(), onWishList);
+        return View("Index", new GameListViewModel
         {
-            var game = _games.GetGame(id, User.GetUserId());
-            if (game == null)
-            {
-                return NotFound();
-            }
+            Games = SearchFilter.Filter(ownGames, search, g => g.Name),
+            Search = search,
+            IsWishList = onWishList,
+        });
+    }
 
-            return EditView(new GameFormViewModel
-            {
-                Id = game.GameId,
-                Name = game.GameName,
-                ConsoleId = game.ConsoleId,
-                Copies = game.Copies,
-                OnWishList = game.IsOnWishList,
-            });
-        }
+    private ViewResult EditView(GameFormViewModel form)
+    {
+        form.ConsoleOptions = consoles.GetConsoles()
+            .Select(c => new SelectListItem(c.Name, c.Id.ToString(CultureInfo.InvariantCulture)))
+            .ToList();
+        return View("Edit", form);
+    }
 
-        [HttpPost]
-        public IActionResult Edit(int id, GameFormViewModel form)
-        {
-            if (!ModelState.IsValid)
-            {
-                return EditView(form);
-            }
-
-            if (!_games.UpdateGame(id, User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList))
-            {
-                return NotFound();
-            }
-            return RedirectToList(form.OnWishList);
-        }
-
-        [HttpPost]
-        public IActionResult Delete(int id)
-        {
-            var game = _games.DeleteGame(id, User.GetUserId());
-            if (game == null)
-            {
-                return NotFound();
-            }
-            return RedirectToList(game.IsOnWishList);
-        }
-
-        private IActionResult List(bool onWishList, string? search)
-        {
-            var games = _games.GetGames(User.GetUserId(), onWishList);
-            return View("Index", new GameListViewModel
-            {
-                Games = SearchFilter.Filter(games, search, g => g.GameName),
-                Search = search,
-                IsWishList = onWishList,
-            });
-        }
-
-        private IActionResult EditView(GameFormViewModel form)
-        {
-            form.ConsoleOptions = _consoles.GetConsoles()
-                .Select(c => new SelectListItem(c.ConsoleName, c.ConsoleId.ToString()))
-                .ToList();
-            return View("Edit", form);
-        }
-
-        private IActionResult RedirectToList(bool onWishList)
-        {
-            return RedirectToAction(onWishList ? nameof(Wishlist) : nameof(Index));
-        }
+    private RedirectToActionResult RedirectToList(bool onWishList)
+    {
+        return RedirectToAction(onWishList ? nameof(Wishlist) : nameof(Index));
     }
 }

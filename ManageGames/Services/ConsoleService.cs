@@ -1,80 +1,74 @@
 using ManageGames.Data;
+using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace ManageGames.Services
+namespace ManageGames.Services;
+
+/// <summary>
+/// Consoles are shared by all users. Only admins may change them, which the controller enforces.
+/// </summary>
+public class ConsoleService(AppDbContext db)
 {
-    /// <summary>
-    /// Consoles are shared by all users. Only admins may change them, which the controller enforces.
-    /// </summary>
-    public class ConsoleService
+    public List<GameConsole> GetConsoles()
     {
-        private readonly AppDbContext _db;
+        return db.Consoles
+            .Include(c => c.Company)
+            .AsNoTracking()
+            .AsEnumerable()
+            .OrderBy(c => c.Name, NameOrder.Comparer)
+            .ToList();
+    }
 
-        public ConsoleService(AppDbContext db)
+    public GameConsole? GetConsole(int id)
+    {
+        return db.Consoles
+            .AsNoTracking()
+            .FirstOrDefault(c => c.Id == id);
+    }
+
+    public void AddConsole(string name, int? companyId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        db.Consoles.Add(new GameConsole { Name = name.Trim(), CompanyId = ExistingCompanyId(companyId) });
+        db.SaveChanges();
+    }
+
+    public bool UpdateConsole(int id, string name, int? companyId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var console = db.Consoles.Find(id);
+        if (console == null)
         {
-            _db = db;
+            return false;
         }
 
-        public List<ConsoleModel> GetConsoles()
+        console.Name = name.Trim();
+        console.CompanyId = ExistingCompanyId(companyId);
+        db.SaveChanges();
+        return true;
+    }
+
+    public bool DeleteConsole(int id)
+    {
+        var console = db.Consoles.Find(id);
+        if (console == null)
         {
-            return _db.Consoles
-                .Include(c => c.Company)
-                .OrderBy(c => EF.Functions.Collate(c.ConsoleName, "NOCASE"))
-                .AsNoTracking()
-                .ToList();
+            return false;
         }
 
-        public ConsoleModel? GetConsole(int id)
-        {
-            return _db.Consoles
-                .AsNoTracking()
-                .FirstOrDefault(c => c.ConsoleId == id);
-        }
+        // Games referencing this console keep existing: the database sets their ConsoleId to
+        // NULL (ON DELETE SET NULL).
+        db.Consoles.Remove(console);
+        db.SaveChanges();
+        return true;
+    }
 
-        public void AddConsole(string name, int? companyId)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-            _db.Consoles.Add(new ConsoleModel { ConsoleName = name.Trim(), CompanyId = ExistingCompanyId(companyId) });
-            _db.SaveChanges();
-        }
-
-        public bool UpdateConsole(int id, string name, int? companyId)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-            var console = _db.Consoles.Find(id);
-            if (console == null)
-            {
-                return false;
-            }
-
-            console.ConsoleName = name.Trim();
-            console.CompanyId = ExistingCompanyId(companyId);
-            _db.SaveChanges();
-            return true;
-        }
-
-        public bool DeleteConsole(int id)
-        {
-            var console = _db.Consoles.Find(id);
-            if (console == null)
-            {
-                return false;
-            }
-
-            // Games referencing this console keep existing: the database sets their ConsoleId to
-            // NULL (ON DELETE SET NULL).
-            _db.Consoles.Remove(console);
-            _db.SaveChanges();
-            return true;
-        }
-
-        // A company id that no longer exists degrades to "no company" instead of failing on the foreign key.
-        private int? ExistingCompanyId(int? id)
-        {
-            return id.HasValue && _db.Companies.Any(c => c.CompanyId == id.Value) ? id : null;
-        }
+    // A company id that no longer exists degrades to "no company" instead of failing on the foreign key.
+    private int? ExistingCompanyId(int? id)
+    {
+        return id.HasValue && db.Companies.Any(c => c.Id == id.Value) ? id : null;
     }
 }

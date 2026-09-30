@@ -1,269 +1,196 @@
 using System.Security.Cryptography;
+using ManageGames.Auth;
 using ManageGames.Data;
+using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
-namespace ManageGames.Services
-{
-    public enum CreateUserResult
-    {
-        Created,
-        UsernameTaken,
-    }
+namespace ManageGames.Services;
 
-    public enum DeleteUserResult
+public enum DeleteUserResult
+{
+    Deleted,
+    NotFound,
+    CannotDeleteSelf,
+}
+
+public record UserListItem(Guid Id, string UserName, bool IsAdmin, bool MustChangePassword, DateTime CreatedAt);
+
+/// <summary>User administration and the first-start setup, on top of ASP.NET Core Identity.</summary>
+public class UserService(
+    AppDbContext db,
+    UserManager<AppUser> userManager,
+    RoleManager<IdentityRole<Guid>> roleManager,
+    SessionService sessions,
+    ILogger<UserService> logger)
+{
+    private const string DefaultAdminUsername = "admin";
+    // Characters for generated passwords; look-alikes (0/O, 1/l/I) are left out.
+    private const string PasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    private const int GeneratedPasswordLength = 20;
+
+    /// <summary>
+    /// Creates the admin role and, on an empty database, the first admin. Without a configured password
+    /// a random one-time password is generated and logged; it has to be changed at the first login.
+    /// </summary>
+    public async Task EnsureInitialAdminAsync(string? configuredUsername, string? configuredPassword)
     {
-        Deleted,
-        NotFound,
-        CannotDeleteSelf,
+        if (!await roleManager.RoleExistsAsync(Roles.Admin))
+        {
+            ThrowIfFailed(await roleManager.CreateAsync(new IdentityRole<Guid>(Roles.Admin)), "Creating the admin role failed");
+        }
+        if (await db.Users.AnyAsync())
+        {
+            return;
+        }
+
+        var username = string.IsNullOrWhiteSpace(configuredUsername) ? DefaultAdminUsername : configuredUsername;
+        if (!string.IsNullOrEmpty(configuredPassword))
+        {
+            ThrowIfFailed(await CreateUserAsync(username, configuredPassword, isAdmin: true, mustChangePassword: false),
+                "Seed:AdminPassword is not accepted");
+            return;
+        }
+
+        IdentityResult result;
+        string oneTimePassword;
+        do
+        {
+            oneTimePassword = RandomNumberGenerator.GetString(PasswordAlphabet, GeneratedPasswordLength);
+            result = await CreateUserAsync(username, oneTimePassword, isAdmin: true, mustChangePassword: true);
+        }
+        while (result.Errors.Any(e => e.Code == CommonPasswordValidator.ErrorCode));
+        ThrowIfFailed(result, "Creating the initial admin failed");
+        logger.InitialAdminCreated(username, oneTimePassword);
     }
 
     /// <summary>
-    /// User accounts: credentials, password changes and the security stamp that ties auth cookies
-    /// to the database.
+    /// Versions before the EF Core rewrite stored passwords in plaintext, which the hasher can't
+    /// verify (it throws on values that aren't Base64). Hashes them once; since the plaintext may
+    /// have been exposed, those users have to choose a new password and their sessions end.
     /// </summary>
-    public class UserService
+    public async Task HashPlaintextPasswordsAsync()
     {
-        private const string DefaultAdminUsername = "admin";
-        // Characters for generated passwords; look-alikes (0/O, 1/l/I) are left out.
-        private const string PasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-
-        // Verifying against this hash when a username doesn't exist makes that failure take as long
-        // as a wrong password, so response times don't reveal which usernames exist.
-        private static readonly string TimingDummyHash = new PasswordHasher<UserModel>().HashPassword(new UserModel(), "timing-dummy");
-
-        private readonly AppDbContext _db;
-        private readonly ILogger<UserService> _logger;
-        private readonly PasswordHasher<UserModel> _hasher = new();
-
-        public UserService(AppDbContext db, ILogger<UserService> logger)
+        var users = db.Users
+            .AsEnumerable()
+            .Where(u => !string.IsNullOrEmpty(u.PasswordHash) && !IsPasswordHash(u.PasswordHash))
+            .ToList();
+        foreach (var user in users)
         {
-            _db = db;
-            _logger = logger;
+            user.PasswordHash = userManager.PasswordHasher.HashPassword(user, user.PasswordHash!);
+            user.MustChangePassword = true;
+            await userManager.UpdateSecurityStampAsync(user);
+        }
+        if (users.Count > 0)
+        {
+            logger.PlaintextPasswordsHashed(users.Count);
+        }
+    }
+
+    public async Task<IdentityResult> CreateUserAsync(string username, string password, bool isAdmin, bool mustChangePassword)
+    {
+        var user = new AppUser { UserName = username.Trim(), MustChangePassword = mustChangePassword };
+
+        // Creating the account and granting the role succeed or fail together.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        IdentityResult result;
+        try
+        {
+            result = await userManager.CreateAsync(user, password);
+        }
+        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 })
+        {
+            // Identity checks for duplicates first, but a concurrent request can still take the name
+            // before the insert; the unique index then rejects it (SQLITE_CONSTRAINT).
+            db.ChangeTracker.Clear();
+            return IdentityResult.Failed(userManager.ErrorDescriber.DuplicateUserName(user.UserName));
+        }
+        if (result.Succeeded && isAdmin)
+        {
+            result = await userManager.AddToRoleAsync(user, Roles.Admin);
+        }
+        if (result.Succeeded)
+        {
+            await transaction.CommitAsync();
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Sets a temporary password chosen by an admin; the user has to replace it at the next login.
+    /// Also lifts a lockout and signs the user out everywhere.
+    /// </summary>
+    public async Task<IdentityResult> ResetPasswordAsync(AppUser user, string temporaryPassword)
+    {
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await userManager.ResetPasswordAsync(user, token, temporaryPassword);
+        if (!result.Succeeded)
+        {
+            return result;
         }
 
-        /// <summary>
-        /// Creates the first admin on an empty database. Without a configured password a random
-        /// one-time password is generated and logged; it has to be changed at the first login.
-        /// </summary>
-        public void EnsureInitialAdmin(string? configuredUsername, string? configuredPassword)
+        user.MustChangePassword = true;
+        await userManager.UpdateAsync(user);
+        await userManager.SetLockoutEndDateAsync(user, null);
+        await userManager.ResetAccessFailedCountAsync(user);
+        sessions.EndAll(user.Id);
+        return result;
+    }
+
+    public async Task<(DeleteUserResult Result, string? Username)> DeleteUserAsync(Guid userId, Guid actingUserId)
+    {
+        // Admins can't delete their own account, which also guarantees that one admin always remains.
+        if (userId == actingUserId)
         {
-            if (_db.Users.Any())
-            {
-                return;
-            }
-
-            var username = string.IsNullOrWhiteSpace(configuredUsername) ? DefaultAdminUsername : configuredUsername;
-            if (!string.IsNullOrEmpty(configuredPassword))
-            {
-                CreateUser(username, configuredPassword, isAdmin: true, mustChangePassword: false);
-                return;
-            }
-
-            var oneTimePassword = RandomNumberGenerator.GetString(PasswordAlphabet, 16);
-            CreateUser(username, oneTimePassword, isAdmin: true, mustChangePassword: true);
-            _logger.LogWarning(
-                "Created the initial admin account '{Username}' with the one-time password '{Password}'. You will be asked to choose your own password after logging in.",
-                username, oneTimePassword);
+            return (DeleteUserResult.CannotDeleteSelf, null);
         }
 
-        /// <summary>
-        /// Versions before the EF Core rewrite stored passwords in plaintext, which the hasher can't
-        /// verify (it throws on values that aren't Base64). Hashes them once; since the plaintext may
-        /// have been exposed, those users have to choose a new password and their sessions end.
-        /// </summary>
-        public void HashPlaintextPasswords()
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user == null)
         {
-            var users = _db.Users
-                .AsEnumerable()
-                .Where(u => u.PasswordHash.Length > 0 && !IsPasswordHash(u.PasswordHash))
-                .ToList();
-            if (users.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var user in users)
-            {
-                user.PasswordHash = _hasher.HashPassword(user, user.PasswordHash);
-                user.MustChangePassword = true;
-                user.SecurityStamp = NewSecurityStamp();
-            }
-            _db.SaveChanges();
-            _logger.LogWarning(
-                "Hashed the plaintext passwords of {Count} user(s). They have to choose a new password at their next login.",
-                users.Count);
+            return (DeleteUserResult.NotFound, null);
         }
 
-        /// <summary>
-        /// Returns the user when the password matches, otherwise null. Hashes created with older
-        /// hashing parameters are upgraded on the fly.
-        /// </summary>
-        public UserModel? ValidateCredentials(string? username, string? password)
+        // Their games and sessions are deleted along with them (cascading foreign keys).
+        ThrowIfFailed(await userManager.DeleteAsync(user), "Deleting the user failed");
+        return (DeleteUserResult.Deleted, user.UserName);
+    }
+
+    public Task<AppUser?> GetUserAsync(Guid userId)
+    {
+        return userManager.FindByIdAsync(userId.ToString());
+    }
+
+    public async Task<List<UserListItem>> GetUsersAsync()
+    {
+        var adminIds = (await userManager.GetUsersInRoleAsync(Roles.Admin)).Select(u => u.Id).ToHashSet();
+        return db.Users
+            .AsNoTracking()
+            .AsEnumerable()
+            .OrderBy(u => u.UserName, NameOrder.Comparer)
+            .Select(u => new UserListItem(u.Id, u.UserName!, adminIds.Contains(u.Id), u.MustChangePassword, u.CreatedAt))
+            .ToList();
+    }
+
+    private static void ThrowIfFailed(IdentityResult result, string message)
+    {
+        if (!result.Succeeded)
         {
-            password ??= string.Empty;
-            var normalized = Normalize(username);
-            var user = _db.Users.FirstOrDefault(u => u.NormalizedUsername == normalized);
-            if (user == null)
-            {
-                _hasher.VerifyHashedPassword(new UserModel(), TimingDummyHash, password);
-                return null;
-            }
-
-            var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
-            if (result == PasswordVerificationResult.Failed)
-            {
-                return null;
-            }
-            if (result == PasswordVerificationResult.SuccessRehashNeeded)
-            {
-                user.PasswordHash = _hasher.HashPassword(user, password);
-                _db.SaveChanges();
-            }
-            return user;
+            throw new InvalidOperationException($"{message}: {string.Join(" ", result.Errors.Select(e => e.Description))}");
         }
+    }
 
-        public CreateUserResult CreateUser(string username, string password, bool isAdmin, bool mustChangePassword)
+    // PasswordHasher output is Base64 with a format marker: 0x00 for the Identity v2 format (always
+    // 49 bytes) or 0x01 for v3 (a 13-byte header followed by salt and subkey).
+    private static bool IsPasswordHash(string value)
+    {
+        var bytes = new byte[value.Length];
+        if (!Convert.TryFromBase64String(value, bytes, out var length) || length == 0)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(username);
-            ArgumentException.ThrowIfNullOrEmpty(password);
-
-            var normalized = Normalize(username);
-            // Checked up front: the unique index on NormalizedUsername would otherwise throw on save.
-            if (_db.Users.Any(u => u.NormalizedUsername == normalized))
-            {
-                return CreateUserResult.UsernameTaken;
-            }
-
-            var user = new UserModel
-            {
-                UserID = Guid.NewGuid(),
-                Username = username.Trim(),
-                NormalizedUsername = normalized,
-                IsAdmin = isAdmin,
-                MustChangePassword = mustChangePassword,
-                SecurityStamp = NewSecurityStamp(),
-            };
-            user.PasswordHash = _hasher.HashPassword(user, password);
-
-            _db.Users.Add(user);
-            _db.SaveChanges();
-            return CreateUserResult.Created;
+            return false;
         }
-
-        /// <summary>Returns false when the current password is wrong.</summary>
-        public bool ChangePassword(Guid userId, string currentPassword, string newPassword)
-        {
-            var user = _db.Users.Find(userId);
-            if (user == null
-                || _hasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
-            {
-                return false;
-            }
-
-            SetPassword(user, newPassword, mustChangePassword: false);
-            return true;
-        }
-
-        /// <summary>
-        /// Sets a temporary password chosen by an admin; the user has to replace it at the next login.
-        /// </summary>
-        public bool ResetPassword(Guid userId, string temporaryPassword)
-        {
-            var user = _db.Users.Find(userId);
-            if (user == null)
-            {
-                return false;
-            }
-
-            SetPassword(user, temporaryPassword, mustChangePassword: true);
-            return true;
-        }
-
-        /// <summary>Revokes every session of the user, on all devices (used by logout).</summary>
-        public void EndSessions(Guid userId)
-        {
-            var user = _db.Users.Find(userId);
-            if (user == null)
-            {
-                return;
-            }
-
-            user.SecurityStamp = NewSecurityStamp();
-            _db.SaveChanges();
-        }
-
-        public DeleteUserResult DeleteUser(Guid userId, Guid actingUserId)
-        {
-            // Admins can't delete their own account, which also guarantees that one admin always remains.
-            if (userId == actingUserId)
-            {
-                return DeleteUserResult.CannotDeleteSelf;
-            }
-
-            var user = _db.Users.Find(userId);
-            if (user == null)
-            {
-                return DeleteUserResult.NotFound;
-            }
-
-            // The user's games are deleted along with them (cascading foreign key).
-            _db.Users.Remove(user);
-            _db.SaveChanges();
-            return DeleteUserResult.Deleted;
-        }
-
-        public UserModel? GetUser(Guid userId)
-        {
-            return _db.Users.AsNoTracking().FirstOrDefault(u => u.UserID == userId);
-        }
-
-        public List<UserModel> GetUsers()
-        {
-            return _db.Users.AsNoTracking().OrderBy(u => u.NormalizedUsername).ToList();
-        }
-
-        public string? GetSecurityStamp(Guid userId)
-        {
-            return _db.Users
-                .Where(u => u.UserID == userId)
-                .Select(u => u.SecurityStamp)
-                .FirstOrDefault();
-        }
-
-        private void SetPassword(UserModel user, string newPassword, bool mustChangePassword)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(newPassword);
-
-            user.PasswordHash = _hasher.HashPassword(user, newPassword);
-            user.MustChangePassword = mustChangePassword;
-            // New credentials end every session that was started with the old ones.
-            user.SecurityStamp = NewSecurityStamp();
-            _db.SaveChanges();
-        }
-
-        // PasswordHasher output is Base64 with a format marker: 0x00 for the Identity v2 format (always
-        // 49 bytes) or 0x01 for v3 (a 13-byte header followed by salt and subkey).
-        private static bool IsPasswordHash(string value)
-        {
-            var bytes = new byte[value.Length];
-            if (!Convert.TryFromBase64String(value, bytes, out var length) || length == 0)
-            {
-                return false;
-            }
-            return (bytes[0] == 0x00 && length == 49) || (bytes[0] == 0x01 && length > 13);
-        }
-
-        // Lower-cased with spaces removed, like the backfill in the UsernameRequiredAndUnique migration.
-        private static string Normalize(string? username)
-        {
-            return (username ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", string.Empty);
-        }
-
-        private static string NewSecurityStamp()
-        {
-            return Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        }
+        return (bytes[0] == 0x00 && length == 49) || (bytes[0] == 0x01 && length > 13);
     }
 }

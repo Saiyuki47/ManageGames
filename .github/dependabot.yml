@@ -1,0 +1,24 @@
+# Weekly update pull requests for the NuGet packages, the local .NET tools and the GitHub Actions.
+# Bootstrap is managed by LibMan (ManageGames/libman.json), which Dependabot doesn't know; see the README.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      # EF Core, Identity, the test host and the dotnet-ef tool share one version line.
+      aspnetcore-efcore:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.EntityFrameworkCore*"
+          - "dotnet-ef"
+      tests:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

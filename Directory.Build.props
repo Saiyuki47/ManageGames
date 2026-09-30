@@ -9,6 +9,13 @@
     <!-- NuGet vulnerability advisories stay warnings; the CI audit step fails on them instead,
          so a newly published advisory doesn't suddenly break local builds. -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+    <!-- The .NET code analyzers' recommended rule set (correctness, security, performance) plus the
+         code style in .editorconfig, both checked in every build. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Needed for the unused-usings check (IDE0005) in the build; the XML docs themselves are optional. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
 </Project>

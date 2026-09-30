@@ -28,13 +28,13 @@ else
             @foreach (var console in Model.Consoles)
             {
                 <tr>
-                    <td>@console.ConsoleName</td>
-                    <td>@(console.Company?.CompanyName ?? "-")</td>
+                    <td>@console.Name</td>
+                    <td>@(console.Company?.Name ?? "-")</td>
                     <td>
                         <div class="row-actions">
-                            <a class="button-link" asp-action="Edit" asp-route-id="@console.ConsoleId">Edit</a>
-                            <form asp-action="Delete" asp-route-id="@console.ConsoleId" method="post"
-                                  data-confirm="Delete &quot;@console.ConsoleName&quot;? Games on this console are kept, without a console.">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@console.Id">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@console.Id" method="post"
+                                  data-confirm="Delete &quot;@console.Name&quot;? Games on this console are kept, without a console.">
                                 <button type="submit">Delete</button>
                             </form>
                         </div>

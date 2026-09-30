@@ -27,12 +27,12 @@ else
             @foreach (var company in Model.Companies)
             {
                 <tr>
-                    <td>@company.CompanyName</td>
+                    <td>@company.Name</td>
                     <td>
                         <div class="row-actions">
-                            <a class="button-link" asp-action="Edit" asp-route-id="@company.CompanyId">Edit</a>
-                            <form asp-action="Delete" asp-route-id="@company.CompanyId" method="post"
-                                  data-confirm="Delete &quot;@company.CompanyName&quot;? Its consoles are kept, without a company.">
+                            <a class="button-link" asp-action="Edit" asp-route-id="@company.Id">Edit</a>
+                            <form asp-action="Delete" asp-route-id="@company.Id" method="post"
+                                  data-confirm="Delete &quot;@company.Name&quot;? Its consoles are kept, without a company.">
                                 <button type="submit">Delete</button>
                             </form>
                         </div>
