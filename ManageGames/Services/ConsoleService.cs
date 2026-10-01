@@ -9,9 +9,9 @@ namespace ManageGames.Services;
 /// </summary>
 public class ConsoleService(AppDbContext db)
 {
-    public Task<List<GameConsole>> GetConsolesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<GameConsole>> GetConsolesAsync(CancellationToken cancellationToken = default)
     {
-        return db.Consoles
+        return await db.Consoles
             .Include(c => c.Company)
             .OrderBy(c => c.Name)
             .AsNoTracking()

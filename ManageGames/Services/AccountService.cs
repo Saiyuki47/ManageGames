@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Identity;
@@ -80,6 +81,7 @@ public class AccountService(
     }
 
 
+    [SuppressMessage("Major Code Smell", "S2696", Justification = "Every instance shares the hasher configuration, so a concurrent first write stores the same kind of hash.")]
     private void SpendHashingTime(string password)
     {
         var dummy = new AppUser();

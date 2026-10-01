@@ -10,9 +10,9 @@ namespace ManageGames.Services;
 /// </summary>
 public class GameService(AppDbContext db)
 {
-    public Task<List<Game>> GetGamesAsync(Guid userId, bool onWishList, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Game>> GetGamesAsync(Guid userId, bool onWishList, CancellationToken cancellationToken = default)
     {
-        return db.Games
+        return await db.Games
             .Where(g => g.UserId == userId && g.IsOnWishList == onWishList)
             .Include(g => g.Console)
             .OrderBy(g => g.Name)

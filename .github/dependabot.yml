@@ -20,7 +20,14 @@ updates:
         patterns:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Testing.*"
           - "Testcontainers*"
+          - "dotnet-reportgenerator-globaltool"
+      # New analyzer versions can bring new rules that fail the build; one PR to review together.
+      analyzers:
+        patterns:
+          - "Meziantou.Analyzer"
+          - "SonarAnalyzer.CSharp"
 
   # The PostgreSQL image of the local development database.
   - package-ecosystem: docker-compose
@@ -28,6 +35,7 @@ updates:
     schedule:
       interval: weekly
 
+  # Also updates the pinned commit SHAs and their version comments in the workflows.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

@@ -7,43 +7,94 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+# Read-only token: the jobs only check out, build and test.
 permissions:
   contents: read
+
+# A newer push to the same branch or pull request makes a running check obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DOTNET_VERSION: '10.0.x'
   SOLUTION: ManageGames.sln
   PROJECT: ManageGames/ManageGames.csproj
+  # The job fails when the test coverage of the app (without migrations) drops below these percentages.
+  MIN_LINE_COVERAGE: 85
+  MIN_BRANCH_COVERAGE: 70
 
+# Actions are pinned to full commit SHAs, so a moved or compromised tag can't change what runs here;
+# Dependabot keeps the SHAs and the version comments up to date.
 jobs:
   build:
     name: Build, test, audit & migrations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore ${{ env.SOLUTION }}
+        run: |
+          dotnet restore "$SOLUTION"
+          dotnet tool restore
 
-      # Warnings fail the build (TreatWarningsAsErrors in Directory.Build.props).
+      # Warnings fail the build (TreatWarningsAsErrors in Directory.Build.props), including the findings
+      # of the .NET, Meziantou and Sonar analyzers.
       - name: Build
-        run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
+        run: dotnet build "$SOLUTION" --configuration Release --no-restore
 
       # Integration tests host the real app in memory against throw-away PostgreSQL databases in a
       # Testcontainers container (Docker is available on the runner). They run on
-      # Microsoft.Testing.Platform (opted in via global.json).
+      # Microsoft.Testing.Platform (opted in via global.json), which also measures the code coverage.
       - name: Test
-        run: dotnet test --solution ${{ env.SOLUTION }} --configuration Release --no-build
+        run: >-
+          dotnet test --solution "$SOLUTION" --configuration Release --no-build
+          --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+
+      # Writes the coverage summary to the run's summary page and fails below the minimum percentages.
+      - name: Coverage report
+        run: |
+          dotnet reportgenerator \
+            -reports:'TestResults/coverage.cobertura.xml' \
+            -targetdir:coverage-report \
+            -reporttypes:'Html;MarkdownSummaryGithub;JsonSummary' \
+            -classfilters:'-ManageGames.Migrations.*'
+          cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+          line=$(jq '.summary.linecoverage' coverage-report/Summary.json)
+          branch=$(jq '.summary.branchcoverage' coverage-report/Summary.json)
+          echo "Line coverage: $line% (minimum $MIN_LINE_COVERAGE%), branch coverage: $branch% (minimum $MIN_BRANCH_COVERAGE%)"
+          failed=0
+          if awk -v c="$line" -v m="$MIN_LINE_COVERAGE" 'BEGIN { exit !(c < m) }'; then
+            echo "::error::Line coverage $line% is below the minimum of $MIN_LINE_COVERAGE%."
+            failed=1
+          fi
+          if awk -v c="$branch" -v m="$MIN_BRANCH_COVERAGE" 'BEGIN { exit !(c < m) }'; then
+            echo "::error::Branch coverage $branch% is below the minimum of $MIN_BRANCH_COVERAGE%."
+            failed=1
+          fi
+          exit $failed
+
+      # The browsable HTML report, to see which lines aren't covered.
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage-report
+          retention-days: 14
 
       # Fails the job if any direct or transitive NuGet package has a known advisory.
       - name: Audit NuGet packages for vulnerabilities
         run: |
-          dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulns.txt
+          dotnet list "$SOLUTION" package --vulnerable --include-transitive 2>&1 | tee vulns.txt
           if grep -q "has the following vulnerable packages" vulns.txt; then
             echo "::error::Vulnerable NuGet packages detected (see the list above)."
             exit 1
@@ -54,25 +105,42 @@ jobs:
       # i.e. the model and the latest migration snapshot are out of sync.
       - name: Check for missing EF Core migrations
         run: |
-          dotnet tool restore
           dotnet dotnet-ef migrations has-pending-model-changes \
-            --project ${{ env.PROJECT }} \
-            --startup-project ${{ env.PROJECT }}
+            --project "$PROJECT" \
+            --startup-project "$PROJECT"
 
   format:
     name: Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore ${{ env.SOLUTION }}
+        run: dotnet restore "$SOLUTION"
 
       # Enforces `dotnet format` style; run `dotnet format ManageGames.sln` locally to fix.
       - name: Verify formatting
-        run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore
+        run: dotnet format "$SOLUTION" --verify-no-changes --no-restore
+
+  workflows:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # actionlint: syntax, expressions, unknown inputs and shellcheck for the run scripts.
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      # zizmor: security problems such as script injection, excessive permissions or unpinned actions.
+      - name: zizmor
+        run: docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/zizmorcore/zizmor:1.30.1 --color=always .github/workflows

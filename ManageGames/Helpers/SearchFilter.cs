@@ -11,7 +11,7 @@ public static class SearchFilter
     /// Returns the items whose selected text contains <paramref name="term"/>, ignoring case
     /// and spaces. An empty/whitespace term matches everything (returns all items).
     /// </summary>
-    public static List<T> Filter<T>(IEnumerable<T> items, string? term, Func<T, string> selector)
+    public static IReadOnlyList<T> Filter<T>(IEnumerable<T> items, string? term, Func<T, string> selector)
     {
         if (string.IsNullOrWhiteSpace(term))
         {
@@ -19,7 +19,7 @@ public static class SearchFilter
         }
 
         var normalizedTerm = Normalize(term);
-        return items.Where(x => Normalize(selector(x)).Contains(normalizedTerm)).ToList();
+        return items.Where(x => Normalize(selector(x)).Contains(normalizedTerm, StringComparison.Ordinal)).ToList();
     }
 
     private static string Normalize(string? value)

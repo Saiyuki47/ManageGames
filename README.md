@@ -157,8 +157,9 @@ consoles that refer to it, without a console or maker. All timestamps are stored
 
 ```bash
 dotnet test                        # all tests; needs Docker (see below)
+dotnet test --coverage --coverage-output-format cobertura   # the same, with code coverage
 dotnet format ManageGames.sln      # apply the code style from .editorconfig
-dotnet tool restore                # once: the pinned dotnet-ef and libman tools
+dotnet tool restore                # once: the pinned dotnet-ef, libman and reportgenerator tools
 dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing the model
 ```
 
@@ -167,8 +168,15 @@ dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing 
   separate database per test class, and removes it afterwards. They use xUnit v3 on
   Microsoft.Testing.Platform (enabled in [global.json](global.json)).
 - **Code quality**: the build treats warnings as errors and runs the .NET code analyzers
-  (`latest-recommended`) and the code style rules of [.editorconfig](.editorconfig) (file-scoped
-  namespaces, primary constructors, naming).
+  (`latest-recommended`), [Meziantou.Analyzer](https://github.com/meziantou/Meziantou.Analyzer)
+  (async code, string comparisons, collections), [SonarAnalyzer](https://rules.sonarsource.com/csharp/)
+  (bugs, code smells, security hotspots) and the code style rules of [.editorconfig](.editorconfig)
+  (file-scoped namespaces, primary constructors, naming). Rules that don't fit the project are switched
+  off in `.editorconfig` with the reason; deliberate exceptions in the code carry a `[SuppressMessage]`
+  with a justification.
+- **Coverage**: `dotnet test --coverage` measures it with Microsoft.Testing.Platform; for a browsable
+  report run `dotnet reportgenerator -reports:TestResults/coverage.cobertura.xml -targetdir:TestResults/report
+  -classfilters:-ManageGames.Migrations.*` and open `TestResults/report/index.html`.
 - **Migrations**: the database schema comes from EF Core migrations in `ManageGames/Migrations`;
   starting data such as the console catalog is added by a migration too, so it is written once per
   database.
@@ -177,13 +185,19 @@ dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing 
 
 ### Continuous integration
 
-- [.github/workflows/dotnet.yml](.github/workflows/dotnet.yml) builds in Release (warnings as errors),
-  runs the tests, fails on NuGet packages with known vulnerabilities and on model changes without a
-  migration, and verifies the formatting.
+- [.github/workflows/dotnet.yml](.github/workflows/dotnet.yml) builds in Release (warnings and analyzer
+  findings as errors), runs the tests with code coverage, fails on NuGet packages with known
+  vulnerabilities and on model changes without a migration, and verifies the formatting. The coverage
+  summary appears on the run's page, the HTML report is attached as the `coverage-report` artifact, and
+  the job fails if coverage (without migrations) drops below 85 % of the lines or 70 % of the branches.
+- The same workflow lints the workflows themselves with [actionlint](https://github.com/rhysd/actionlint)
+  (syntax, expressions, shell scripts) and [zizmor](https://docs.zizmor.sh/) (security problems such as
+  script injection or broad permissions). All actions are pinned to commit SHAs.
 - [.github/workflows/pages.yml](.github/workflows/pages.yml) publishes the landing page in `docs` with
   GitHub Pages.
-- [Dependabot](.github/dependabot.yml) proposes updates for the NuGet packages, the .NET tools, the
-  GitHub Actions and the PostgreSQL image every week. It doesn't cover Bootstrap (LibMan).
+- [Dependabot](.github/dependabot.yml) proposes updates for the NuGet packages and analyzers, the .NET
+  tools, the GitHub Actions (including their pinned SHAs) and the PostgreSQL image every week. It doesn't
+  cover Bootstrap (LibMan) or the actionlint and zizmor versions in `dotnet.yml`.
 
 ### Project structure
 

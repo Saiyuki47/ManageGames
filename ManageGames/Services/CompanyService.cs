@@ -10,9 +10,9 @@ namespace ManageGames.Services;
 /// </summary>
 public class CompanyService(AppDbContext db)
 {
-    public Task<List<Company>> GetCompaniesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Company>> GetCompaniesAsync(CancellationToken cancellationToken = default)
     {
-        return db.Companies
+        return await db.Companies
             .OrderBy(c => c.Name)
             .AsNoTracking()
             .ToListAsync(cancellationToken);

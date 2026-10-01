@@ -30,7 +30,7 @@ public class SeedingTests(FreshInstallFactory factory) : IClassFixture<FreshInst
         Assert.True(factory.Query(db => db.UserRoles.Any(r => r.UserId == admin.Id)));
         Assert.True(admin.MustChangePassword);
 
-        var message = Assert.Single(factory.Logs.Messages, m => m.Contains("one-time password"));
+        var message = Assert.Single(factory.Logs.Messages, m => m.Contains("one-time password", StringComparison.Ordinal));
         var password = Regex.Match(message, "one-time password '([^']+)'").Groups[1].Value;
         var browser = await factory.SignInAsync(ManageGamesFactory.AdminUsername, password);
 

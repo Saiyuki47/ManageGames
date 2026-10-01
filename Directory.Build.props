@@ -18,4 +18,12 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- Third-party analyzers on top of the .NET ones, also failing the build: Meziantou (correctness,
+       async, string comparisons, collections) and SonarAnalyzer (bugs, code smells, security hotspots).
+       Build-time only; they don't ship with the app. Rules that don't fit are switched off in .editorconfig. -->
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.291" PrivateAssets="all" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>

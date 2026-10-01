@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using ManageGames.Auth;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +30,7 @@ public class HomeController : Controller
     // status code pages middleware with the original method, hence the ignored antiforgery token.
     [AllowPendingPasswordChange]
     [IgnoreAntiforgeryToken]
+    [SuppressMessage("Security", "S4502", Justification = "Read-only error page.")]
     public IActionResult HttpStatus(int code)
     {
         return View(code);
@@ -36,6 +38,7 @@ public class HomeController : Controller
 
     [AllowPendingPasswordChange]
     [IgnoreAntiforgeryToken]
+    [SuppressMessage("Security", "S4502", Justification = "Read-only error page.")]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {

@@ -61,6 +61,14 @@ dotnet_naming_symbols.private_static_readonly.applicable_accessibilities = priva
 dotnet_naming_symbols.private_static_readonly.required_modifiers = static, readonly
 dotnet_naming_style.pascal_case.capitalization = pascal_case
 
+# Third-party analyzers (Directory.Build.props). Rules switched off here don't fit this project:
+# ASP.NET Core has no synchronization context, so ConfigureAwait(false) would only add noise.
+dotnet_diagnostic.MA0004.severity = none
+# The view models of one area and small result types live next to their counterparts on purpose.
+dotnet_diagnostic.MA0048.severity = none
+# `==` on strings is already an ordinal comparison in C#.
+dotnet_diagnostic.MA0006.severity = none
+
 # EF Core generates the migrations; they are not hand-written code.
 [**/Migrations/*.cs]
 generated_code = true
@@ -71,3 +79,8 @@ dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1861.severity = none
 # The in-memory requests finish in milliseconds; a cancellation token on every call would only add noise.
 dotnet_diagnostic.xUnit1051.severity = none
+# Test data and assertions: default string comparers, untimed regular expressions on the app's own
+# pages and concrete collection types are fine here.
+dotnet_diagnostic.MA0002.severity = none
+dotnet_diagnostic.MA0009.severity = none
+dotnet_diagnostic.MA0016.severity = none

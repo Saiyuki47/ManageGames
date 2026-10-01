@@ -72,14 +72,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
         // Every ITimestamped entity gets a DB-side default so rows inserted outside EF still receive a
         // sensible timestamp.
-        foreach (var entityType in builder.Model.GetEntityTypes())
+        foreach (var entityType in builder.Model.GetEntityTypes().Where(t => typeof(ITimestamped).IsAssignableFrom(t.ClrType)))
         {
-            if (typeof(ITimestamped).IsAssignableFrom(entityType.ClrType))
-            {
-                var entity = builder.Entity(entityType.ClrType);
-                entity.Property(nameof(ITimestamped.CreatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
-                entity.Property(nameof(ITimestamped.UpdatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            }
+            var entity = builder.Entity(entityType.ClrType);
+            entity.Property(nameof(ITimestamped.CreatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(nameof(ITimestamped.UpdatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
         }
     }
 

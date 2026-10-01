@@ -8,7 +8,7 @@ namespace ManageGames.ViewModels;
 
 public class ConsoleListViewModel
 {
-    public List<GameConsole> Consoles { get; set; } = [];
+    public IReadOnlyList<GameConsole> Consoles { get; set; } = [];
     public string? Search { get; set; }
 }
 
@@ -27,5 +27,5 @@ public class ConsoleFormViewModel
 
     [BindNever]
     [ValidateNever]
-    public List<SelectListItem> CompanyOptions { get; set; } = [];
+    public IReadOnlyList<SelectListItem> CompanyOptions { get; set; } = [];
 }

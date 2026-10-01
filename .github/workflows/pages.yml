@@ -8,11 +8,8 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# Least privilege for the deploy; id-token is required by deploy-pages.
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Nothing by default; the deploy job gets only what it needs.
+permissions: {}
 
 # Allow one concurrent deployment; don't cancel an in-progress one.
 concurrency:
@@ -23,22 +20,28 @@ jobs:
   deploy:
     name: Build & deploy static site
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # check out the repository
+      pages: write    # publish the site
+      id-token: write # deploy-pages proves its identity to GitHub Pages with an OIDC token
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Pages must be enabled once under Settings > Pages (Source: GitHub Actions);
       # the default workflow token is not allowed to create the site itself.
       - name: Configure Pages
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

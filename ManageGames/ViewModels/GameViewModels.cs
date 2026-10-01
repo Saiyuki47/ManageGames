@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
@@ -9,7 +10,7 @@ namespace ManageGames.ViewModels;
 /// <summary>The game list and the wishlist share one view.</summary>
 public class GameListViewModel
 {
-    public List<Game> Games { get; set; } = [];
+    public IReadOnlyList<Game> Games { get; set; } = [];
     public string? Search { get; set; }
     public bool IsWishList { get; set; }
 }
@@ -32,9 +33,10 @@ public class GameFormViewModel
     public int Copies { get; set; } = 1;
 
     [Display(Name = "On wishlist")]
+    [SuppressMessage("Major Bug", "S6964", Justification = "A checkbox: not posted means not checked.")]
     public bool OnWishList { get; set; }
 
     [BindNever]
     [ValidateNever]
-    public List<SelectListItem> ConsoleOptions { get; set; } = [];
+    public IReadOnlyList<SelectListItem> ConsoleOptions { get; set; } = [];
 }

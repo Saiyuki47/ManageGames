@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using ManageGames.Auth;
 using ManageGames.Data;
@@ -27,6 +28,7 @@ public class UserService(
 {
     private const string DefaultAdminUsername = "admin";
     // Characters for generated passwords; look-alikes (0/O, 1/l/I) are left out.
+    [SuppressMessage("Security", "S2068", Justification = "The characters generated passwords are made of, not a password.")]
     private const string PasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private const int GeneratedPasswordLength = 20;
 
@@ -158,7 +160,7 @@ public class UserService(
         return userManager.FindByIdAsync(userId.ToString());
     }
 
-    public async Task<List<UserListItem>> GetUsersAsync()
+    public async Task<IReadOnlyList<UserListItem>> GetUsersAsync()
     {
         var adminIds = (await userManager.GetUsersInRoleAsync(Roles.Admin)).Select(u => u.Id).ToHashSet();
         var users = await db.Users

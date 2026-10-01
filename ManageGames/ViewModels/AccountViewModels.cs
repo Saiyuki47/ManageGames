@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using ManageGames.Auth;
 using ManageGames.Services;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -36,7 +37,7 @@ public class ChangePasswordViewModel
 
 public class UserListViewModel
 {
-    public List<UserListItem> Users { get; set; } = [];
+    public IReadOnlyList<UserListItem> Users { get; set; } = [];
     public Guid CurrentUserId { get; set; }
 }
 
@@ -54,6 +55,7 @@ public class CreateUserViewModel
     public string Password { get; set; } = string.Empty;
 
     [Display(Name = "Administrator")]
+    [SuppressMessage("Major Bug", "S6964", Justification = "A checkbox: not posted means not checked.")]
     public bool IsAdmin { get; set; }
 }
 

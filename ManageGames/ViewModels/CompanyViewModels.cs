@@ -5,7 +5,7 @@ namespace ManageGames.ViewModels;
 
 public class CompanyListViewModel
 {
-    public List<Company> Companies { get; set; } = [];
+    public IReadOnlyList<Company> Companies { get; set; } = [];
     public string? Search { get; set; }
 }
 

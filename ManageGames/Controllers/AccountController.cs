@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ManageGames.Auth;
 using ManageGames.Services;
 using ManageGames.ViewModels;
@@ -22,6 +23,7 @@ public class AccountController(AccountService accounts, IAntiforgery antiforgery
     // Validated below: the form's token belongs to an anonymous visitor, so the global check would
     // reject it with 400 when the request already carries a valid auth cookie.
     [IgnoreAntiforgeryToken]
+    [SuppressMessage("Security", "S4502", Justification = "The antiforgery token is validated in the action.")]
     public async Task<IActionResult> Login(LoginViewModel form)
     {
         // Already signed in, e.g. in another tab, or a cross-site link showed the login form because
@@ -62,6 +64,7 @@ public class AccountController(AccountService accounts, IAntiforgery antiforgery
     // page's token bound to a user the request no longer has. Logging out is harmless, and cross-site
     // posts can't log anyone out since they don't carry the SameSite=Strict cookie.
     [IgnoreAntiforgeryToken]
+    [SuppressMessage("Security", "S4502", Justification = "Logging out is harmless; see above.")]
     public async Task<IActionResult> Logout()
     {
         if (User.Identity?.IsAuthenticated == true)
