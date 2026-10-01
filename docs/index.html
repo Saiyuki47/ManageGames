@@ -85,6 +85,9 @@
   .card .ico { font-size: 26px; margin-bottom: 12px; }
   .card h3 { margin: 0 0 6px; font-size: 17px; }
   .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .card ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 14.5px; }
+  .card li + li { margin-top: 6px; }
+  .card li strong { color: var(--text); font-weight: 600; }
 
   .badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
   .tech {
@@ -119,6 +122,7 @@
       <p class="lead">A self-hosted web app to keep your video-game collection organized — games, consoles, makers and a wishlist, each behind your own account.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/Saiyuki47/ManageGames">★ View on GitHub</a>
+        <a class="btn btn-ghost" href="#requirements">Requirements</a>
         <a class="btn btn-ghost" href="#run">Run it locally</a>
       </div>
     </div>
@@ -156,6 +160,34 @@
     </div>
   </section>
 
+  <section id="requirements" style="padding-top: 0;">
+    <div class="wrap">
+      <h2>Requirements</h2>
+      <p class="section-sub">Runs on Windows, macOS and Linux.</p>
+      <div class="grid">
+        <div class="card">
+          <div class="ico">💻</div><h3>To try it on your machine</h3>
+          <ul>
+            <li><strong>.NET 10 SDK</strong> to build and run the app</li>
+            <li><strong>Docker</strong> (Docker Desktop, or Docker Engine with Compose) for the database and the tests</li>
+            <li><strong>Git</strong> to get the code</li>
+            <li>Free ports <strong>5433</strong> (database) and <strong>7200</strong> (app)</li>
+            <li>A current browser: Chrome, Edge, Firefox or Safari</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="ico">🌐</div><h3>To host it for others</h3>
+          <ul>
+            <li><strong>ASP.NET Core 10 Runtime</strong> on the server (the SDK isn't needed there)</li>
+            <li><strong>PostgreSQL</strong> (tested with version 18), on your own server or as a managed service; the app creates its tables itself</li>
+            <li><strong>HTTPS</strong>: a domain with a certificate and a reverse proxy such as Caddy or nginx</li>
+            <li>Regular <strong>backups</strong> of the database</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="run">
     <div class="wrap">
       <h2>Run it locally</h2>
@@ -172,7 +204,6 @@
 <span class="c"># creates the account "admin"; its one-time password is printed to the</span>
 <span class="c"># console, and you choose your own password at the first login</span></pre>
       </div>
-      <p class="note">Requires the .NET 10 SDK and Docker, which runs the database.</p>
       <p class="note">Forgot your password? <code>dotnet run --project ManageGames -- reset-password &lt;username&gt;</code></p>
     </div>
   </section>
