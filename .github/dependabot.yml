@@ -7,16 +7,27 @@ updates:
     schedule:
       interval: weekly
     groups:
-      # EF Core, Identity, the test host and the dotnet-ef tool share one version line.
+      # EF Core, Identity, the PostgreSQL provider, the test host and the dotnet-ef tool share one
+      # version line.
       aspnetcore-efcore:
         patterns:
           - "Microsoft.AspNetCore.*"
           - "Microsoft.EntityFrameworkCore*"
+          - "Microsoft.Extensions.*"
+          - "Microsoft.Data.Sqlite"
+          - "Npgsql*"
           - "dotnet-ef"
       tests:
         patterns:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
+          - "Testcontainers*"
+
+  # The PostgreSQL image of the local development database.
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
 
   - package-ecosystem: github-actions
     directory: "/"

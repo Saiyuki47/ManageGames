@@ -1,5 +1,4 @@
 using ManageGames.Data;
-using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,48 +10,47 @@ namespace ManageGames.Services;
 /// </summary>
 public class CompanyService(AppDbContext db)
 {
-    public List<Company> GetCompanies()
+    public Task<List<Company>> GetCompaniesAsync(CancellationToken cancellationToken = default)
+    {
+        return db.Companies
+            .OrderBy(c => c.Name)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<Company?> GetCompanyAsync(int id, CancellationToken cancellationToken = default)
     {
         return db.Companies
             .AsNoTracking()
-            .AsEnumerable()
-            .OrderBy(c => c.Name, NameOrder.Comparer)
-            .ToList();
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
 
-    public Company? GetCompany(int id)
-    {
-        return db.Companies
-            .AsNoTracking()
-            .FirstOrDefault(c => c.Id == id);
-    }
-
-    public void AddCompany(string name)
+    public async Task AddCompanyAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         db.Companies.Add(new Company { Name = name.Trim() });
-        db.SaveChanges();
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    public bool UpdateCompany(int id, string name)
+    public async Task<bool> UpdateCompanyAsync(int id, string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var company = db.Companies.Find(id);
+        var company = await db.Companies.FindAsync([id], cancellationToken);
         if (company == null)
         {
             return false;
         }
 
         company.Name = name.Trim();
-        db.SaveChanges();
+        await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    public bool DeleteCompany(int id)
+    public async Task<bool> DeleteCompanyAsync(int id, CancellationToken cancellationToken = default)
     {
-        var company = db.Companies.Find(id);
+        var company = await db.Companies.FindAsync([id], cancellationToken);
         if (company == null)
         {
             return false;
@@ -61,7 +59,7 @@ public class CompanyService(AppDbContext db)
         // Consoles made by this company keep existing: the database sets their CompanyId to
         // NULL (ON DELETE SET NULL).
         db.Companies.Remove(company);
-        db.SaveChanges();
+        await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 }

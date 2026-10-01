@@ -1,5 +1,4 @@
 using ManageGames.Data;
-using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,50 +9,49 @@ namespace ManageGames.Services;
 /// </summary>
 public class ConsoleService(AppDbContext db)
 {
-    public List<GameConsole> GetConsoles()
+    public Task<List<GameConsole>> GetConsolesAsync(CancellationToken cancellationToken = default)
     {
         return db.Consoles
             .Include(c => c.Company)
+            .OrderBy(c => c.Name)
             .AsNoTracking()
-            .AsEnumerable()
-            .OrderBy(c => c.Name, NameOrder.Comparer)
-            .ToList();
+            .ToListAsync(cancellationToken);
     }
 
-    public GameConsole? GetConsole(int id)
+    public Task<GameConsole?> GetConsoleAsync(int id, CancellationToken cancellationToken = default)
     {
         return db.Consoles
             .AsNoTracking()
-            .FirstOrDefault(c => c.Id == id);
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
 
-    public void AddConsole(string name, int? companyId)
+    public async Task AddConsoleAsync(string name, int? companyId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        db.Consoles.Add(new GameConsole { Name = name.Trim(), CompanyId = ExistingCompanyId(companyId) });
-        db.SaveChanges();
+        db.Consoles.Add(new GameConsole { Name = name.Trim(), CompanyId = await ExistingCompanyIdAsync(companyId, cancellationToken) });
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    public bool UpdateConsole(int id, string name, int? companyId)
+    public async Task<bool> UpdateConsoleAsync(int id, string name, int? companyId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var console = db.Consoles.Find(id);
+        var console = await db.Consoles.FindAsync([id], cancellationToken);
         if (console == null)
         {
             return false;
         }
 
         console.Name = name.Trim();
-        console.CompanyId = ExistingCompanyId(companyId);
-        db.SaveChanges();
+        console.CompanyId = await ExistingCompanyIdAsync(companyId, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
-    public bool DeleteConsole(int id)
+    public async Task<bool> DeleteConsoleAsync(int id, CancellationToken cancellationToken = default)
     {
-        var console = db.Consoles.Find(id);
+        var console = await db.Consoles.FindAsync([id], cancellationToken);
         if (console == null)
         {
             return false;
@@ -62,13 +60,13 @@ public class ConsoleService(AppDbContext db)
         // Games referencing this console keep existing: the database sets their ConsoleId to
         // NULL (ON DELETE SET NULL).
         db.Consoles.Remove(console);
-        db.SaveChanges();
+        await db.SaveChangesAsync(cancellationToken);
         return true;
     }
 
     // A company id that no longer exists degrades to "no company" instead of failing on the foreign key.
-    private int? ExistingCompanyId(int? id)
+    private async Task<int?> ExistingCompanyIdAsync(int? id, CancellationToken cancellationToken)
     {
-        return id.HasValue && db.Companies.Any(c => c.Id == id.Value) ? id : null;
+        return id.HasValue && await db.Companies.AnyAsync(c => c.Id == id.Value, cancellationToken) ? id : null;
     }
 }

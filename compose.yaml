@@ -1,0 +1,25 @@
+# Local PostgreSQL for development: `docker compose up -d`.
+# The app's Development settings (ManageGames/appsettings.Development.json) point here.
+# The password is for this local container only; it is reachable from this machine only.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: managegames
+      POSTGRES_USER: managegames
+      POSTGRES_PASSWORD: managegames-dev
+    ports:
+      # 5433 on this machine, so it doesn't clash with a PostgreSQL installed directly on it.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql/<version>/docker.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U managegames -d managegames"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

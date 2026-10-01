@@ -18,11 +18,11 @@ public class SessionService(AppDbContext db, IConfiguration configuration)
         configuration.GetValue("Authentication:AbsoluteSessionLifetime", DefaultAbsoluteLifetime);
 
     /// <summary>Starts a session for the user and returns its id.</summary>
-    public string Start(Guid userId)
+    public async Task<string> StartAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         // Housekeeping: sessions past their absolute end can never be used again.
-        db.UserSessions.Where(s => s.ExpiresAt <= now).ExecuteDelete();
+        await db.UserSessions.Where(s => s.ExpiresAt <= now).ExecuteDeleteAsync(cancellationToken);
 
         var session = new UserSession
         {
@@ -32,25 +32,25 @@ public class SessionService(AppDbContext db, IConfiguration configuration)
             ExpiresAt = now + AbsoluteLifetime,
         };
         db.UserSessions.Add(session);
-        db.SaveChanges();
+        await db.SaveChangesAsync(cancellationToken);
         return session.Id;
     }
 
-    public bool IsActive(string sessionId, Guid userId)
+    public Task<bool> IsActiveAsync(string sessionId, Guid userId, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
-        return db.UserSessions.Any(s => s.Id == sessionId && s.UserId == userId && s.ExpiresAt > now);
+        return db.UserSessions.AnyAsync(s => s.Id == sessionId && s.UserId == userId && s.ExpiresAt > now, cancellationToken);
     }
 
     /// <summary>Ends one session, e.g. when that browser logs out.</summary>
-    public void End(string sessionId)
+    public Task EndAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        db.UserSessions.Where(s => s.Id == sessionId).ExecuteDelete();
+        return db.UserSessions.Where(s => s.Id == sessionId).ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <summary>Ends every session of the user, on all devices.</summary>
-    public void EndAll(Guid userId)
+    public Task EndAllAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        db.UserSessions.Where(s => s.UserId == userId).ExecuteDelete();
+        return db.UserSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(cancellationToken);
     }
 }

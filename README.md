@@ -13,21 +13,32 @@ their makers and a wishlist. Every user sees only their own collection.
 
 ## Getting started
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) and PostgreSQL. For development,
+[Docker](https://www.docker.com/) runs a local PostgreSQL from `compose.yaml`:
 
 ```bash
 git clone https://github.com/Saiyuki47/ManageGames.git
 cd ManageGames
+docker compose up -d               # local PostgreSQL 18 (the Development settings point to it)
 dotnet run --project ManageGames
 ```
 
-Then open <https://localhost:7200>. The first start creates the SQLite database
-(`ManageGames/DB/DataBase.db`) and the admin account `admin`, and prints its one-time password to
-the console. You choose your own password at the first login.
+Then open <https://localhost:7200>. The first start creates the tables and the admin account `admin`,
+and prints its one-time password to the console. You choose your own password at the first login.
 
-Updating from an older version migrates the database automatically at the next start: accounts
-move to ASP.NET Core Identity, and passwords that don't meet the current rules (15 characters and
-more) still work once, but have to be replaced right after logging in.
+### Moving from an older SQLite installation
+
+Versions up to commit `e741e94` kept their data in a SQLite file (`ManageGames/DB/DataBase.db`).
+Stop the old app, then import that file once into the new, empty PostgreSQL database:
+
+```bash
+dotnet run --project ManageGames -- import-sqlite /path/to/DataBase.db
+```
+
+Accounts, admins, games, consoles and companies are copied with their ids, password hashes and
+timestamps; the SQLite file is only read. Everybody logs in with their old password. Passwords that
+don't meet the current rules (15 characters and more) still work once, but have to be replaced right
+after logging in. A published build runs the same command as `dotnet ManageGames.dll import-sqlite <file>`.
 
 ### Configuration
 
@@ -36,13 +47,14 @@ Settings can come from `appsettings.json`, user secrets or environment variables
 
 | Setting | Purpose | Default |
 | --- | --- | --- |
-| `ConnectionStrings:ManageGames` | SQLite connection string | `ManageGames/DB/DataBase.db` |
+| `ConnectionStrings:ManageGames` | PostgreSQL connection string, e.g. `Host=db;Database=managegames;Username=managegames;Password=…` (required) | the `compose.yaml` database in Development |
 | `Seed:AdminUsername` | Name of the first admin, used only on an empty database | `admin` |
 | `Seed:AdminPassword` | Password of the first admin (no forced change; must meet the password rules) | a generated one-time password |
 | `RateLimiting:LoginPermitLimit` | Login attempts per minute and client IP | `10` |
 | `RateLimiting:PasswordChangePermitLimit` | Password change attempts per minute and user | `10` |
 | `Authentication:AbsoluteSessionLifetime` | Maximum length of a session, however active | `12:00:00` |
-| `DataProtection:KeysPath` | Folder for the keys that encrypt the cookies (set it in containers) | the user profile |
+| `DataProtection:CertificatePath` | PFX certificate that encrypts the cookie keys in the database (recommended outside development) | not encrypted |
+| `DataProtection:CertificatePassword` | Password of that PFX file | none |
 | `AllowedHosts` | Host names the app answers to; set it to your domain when it is reachable from outside | `*` |
 
 ### Running it for others
@@ -51,8 +63,16 @@ Settings can come from `appsettings.json`, user secrets or environment variables
 - Behind a reverse proxy, set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, so the app sees the
   clients' addresses (for the rate limits) and the original scheme. Only do this when the app can't
   be reached directly, since it trusts the forwarded headers.
-- In a container, point `DataProtection:KeysPath` to a persistent volume, otherwise every restart
-  signs everybody out.
+- Use a PostgreSQL you back up, e.g. a managed one (Azure, AWS, Google Cloud, Neon, ...) or your
+  own with regular `pg_dump` backups. Keep its password in an environment variable or a secret store,
+  not in `appsettings.json`.
+- Several instances behind a load balancer work: sessions and the keys that encrypt the cookies live
+  in the database, and EF Core locks the database while one instance applies migrations at startup.
+  Set `DataProtection:CertificatePath` so those keys are stored encrypted; without it, the app logs a
+  warning that they are stored unencrypted.
+  The login rate limits count per instance; put a global limit in the reverse proxy if you need one.
+- `/healthz` answers `Healthy` while the database is reachable, for load balancers and container
+  platforms.
 
 ## Security
 
@@ -77,7 +97,7 @@ Settings can come from `appsettings.json`, user secrets or environment variables
 ## Development
 
 ```bash
-dotnet test                        # integration tests: in-memory host, throw-away SQLite databases
+dotnet test                        # integration tests: in-memory host, throw-away PostgreSQL databases (needs Docker)
 dotnet format ManageGames.sln      # code style from .editorconfig (verified in CI)
 dotnet tool restore                # once, for the pinned dotnet-ef and libman
 dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing the model

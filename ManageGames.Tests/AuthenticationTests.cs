@@ -132,7 +132,7 @@ public class AuthenticationTests(ManageGamesFactory factory) : IClassFixture<Man
         var phoneToken = await phone.GetFormTokenAsync("/Games");
 
         // E.g. a password change on another device ended the phone's session; its page still shows "Log out".
-        factory.EndSessions(user.Username);
+        await factory.EndSessionsAsync(user.Username);
 
         Browser.AssertRedirect(await phone.PostFormAsync("/Account/Logout", phoneToken), "/");
     }
@@ -143,7 +143,7 @@ public class AuthenticationTests(ManageGamesFactory factory) : IClassFixture<Man
         var user = await factory.CreateUserAsync();
         var browser = await factory.SignInAsync(user);
         var token = await browser.GetFormTokenAsync("/Games/Create");
-        factory.EndSessions(user.Username);
+        await factory.EndSessionsAsync(user.Username);
 
         var response = await browser.PostFormAsync("/Games/Create", token, new Dictionary<string, string>
         {

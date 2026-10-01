@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using ManageGames.Data;
 using ManageGames.Services;
@@ -5,7 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ManageGames.Tests.Infrastructure;
@@ -13,17 +14,18 @@ namespace ManageGames.Tests.Infrastructure;
 public record TestUser(string Username, string Password);
 
 /// <summary>
-/// Hosts the real app in memory against its own throw-away SQLite file and a known admin password.
+/// Hosts the real app in memory against its own throw-away PostgreSQL database (see
+/// <see cref="TestDatabase"/>) and a known admin password.
 /// </summary>
-public class ManageGamesFactory : WebApplicationFactory<Program>
+public class ManageGamesFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string AdminUsername = "admin";
     // Test-only passwords; they meet the password policy (15+ characters, not guessable).
     public const string AdminPassword = "Blue-Ocean-Lantern-42";
     public const string UserPassword = "Quiet-Maple-Rocket-17";
 
-    /// <summary>The SQLite file of this factory's app; deleted when the factory is disposed.</summary>
-    protected virtual string DatabasePath { get; } = Path.Combine(Path.GetTempPath(), $"managegames-tests-{Guid.NewGuid():N}.db");
+    /// <summary>The database of this factory's app; dropped when the factory is disposed.</summary>
+    public string ConnectionString { get; protected set; } = string.Empty;
 
     /// <summary>Password of the seeded admin; null lets the app generate a one-time password.</summary>
     protected virtual string? SeedAdminPassword => AdminPassword;
@@ -32,15 +34,40 @@ public class ManageGamesFactory : WebApplicationFactory<Program>
 
     protected virtual int PasswordChangePermitLimit => 10_000;
 
+    /// <summary>Keeps the cookie keys in memory; false uses the app's own key storage in the database.</summary>
+    protected virtual bool UseEphemeralKeys => true;
+
+    public virtual async ValueTask InitializeAsync()
+    {
+        ConnectionString = await TestDatabase.CreateAsync();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        if (ConnectionString.Length > 0)
+        {
+            await TestDatabase.DropAsync(ConnectionString);
+        }
+        GC.SuppressFinalize(this);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("ConnectionStrings:ManageGames", $"Data Source={DatabasePath}");
-        builder.UseSetting("Seed:AdminUsername", AdminUsername);
-        builder.UseSetting("Seed:AdminPassword", SeedAdminPassword ?? string.Empty);
-        builder.UseSetting("RateLimiting:LoginPermitLimit", LoginPermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        builder.UseSetting("RateLimiting:PasswordChangePermitLimit", PasswordChangePermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        // Keep the keys that encrypt the auth cookie in memory instead of the user profile.
-        builder.ConfigureTestServices(services => services.AddDataProtection().UseEphemeralDataProtectionProvider());
+        // Added last, so these win over appsettings.Development.json (which points to the local database).
+        builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:ManageGames"] = ConnectionString,
+            ["Seed:AdminUsername"] = AdminUsername,
+            ["Seed:AdminPassword"] = SeedAdminPassword ?? string.Empty,
+            ["RateLimiting:LoginPermitLimit"] = LoginPermitLimit.ToString(CultureInfo.InvariantCulture),
+            ["RateLimiting:PasswordChangePermitLimit"] = PasswordChangePermitLimit.ToString(CultureInfo.InvariantCulture),
+        }));
+        if (UseEphemeralKeys)
+        {
+            // Keep the keys that encrypt the auth cookie in memory instead of the database.
+            builder.ConfigureTestServices(services => services.AddDataProtection().UseEphemeralDataProtectionProvider());
+        }
     }
 
     /// <summary>
@@ -111,27 +138,16 @@ public class ManageGamesFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>Ends all sessions of the user on the server, as a password change elsewhere would.</summary>
-    public void EndSessions(string username)
+    public async Task EndSessionsAsync(string username)
     {
         var userId = UserId(username);
         using var scope = Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<SessionService>().EndAll(userId);
+        await scope.ServiceProvider.GetRequiredService<SessionService>().EndAllAsync(userId);
     }
 
     /// <summary>A name no other test uses, since the tests of a class share one database.</summary>
     public static string Unique(string prefix)
     {
         return $"{prefix}-{Guid.NewGuid().ToString("N")[..8]}";
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        if (disposing)
-        {
-            // Pooled connections keep the file open.
-            SqliteConnection.ClearAllPools();
-            File.Delete(DatabasePath);
-        }
     }
 }

@@ -34,8 +34,9 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
 
-      # Integration tests host the real app in memory against throw-away SQLite databases.
-      # They run on Microsoft.Testing.Platform (opted in via global.json).
+      # Integration tests host the real app in memory against throw-away PostgreSQL databases in a
+      # Testcontainers container (Docker is available on the runner). They run on
+      # Microsoft.Testing.Platform (opted in via global.json).
       - name: Test
         run: dotnet test --solution ${{ env.SOLUTION }} --configuration Release --no-build
 

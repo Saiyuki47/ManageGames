@@ -13,54 +13,54 @@ namespace ManageGames.Controllers;
 [Authorize(Roles = Roles.Admin)]
 public class ConsolesController(ConsoleService consoles, CompanyService companies) : Controller
 {
-    public IActionResult Index(string? search)
+    public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken)
     {
         return View(new ConsoleListViewModel
         {
-            Consoles = SearchFilter.Filter(consoles.GetConsoles(), search, c => c.Name),
+            Consoles = SearchFilter.Filter(await consoles.GetConsolesAsync(cancellationToken), search, c => c.Name),
             Search = search,
         });
     }
 
     [HttpGet]
-    public IActionResult Create()
+    public Task<ViewResult> Create(CancellationToken cancellationToken)
     {
-        return EditView(new ConsoleFormViewModel());
+        return EditViewAsync(new ConsoleFormViewModel(), cancellationToken);
     }
 
     [HttpPost]
-    public IActionResult Create(ConsoleFormViewModel form)
+    public async Task<IActionResult> Create(ConsoleFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
-            return EditView(form);
+            return await EditViewAsync(form, cancellationToken);
         }
 
-        consoles.AddConsole(form.Name, form.CompanyId);
+        await consoles.AddConsoleAsync(form.Name, form.CompanyId, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
-    public IActionResult Edit(int id)
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
-        var console = consoles.GetConsole(id);
+        var console = await consoles.GetConsoleAsync(id, cancellationToken);
         if (console == null)
         {
             return NotFound();
         }
 
-        return EditView(new ConsoleFormViewModel { Id = console.Id, Name = console.Name, CompanyId = console.CompanyId });
+        return await EditViewAsync(new ConsoleFormViewModel { Id = console.Id, Name = console.Name, CompanyId = console.CompanyId }, cancellationToken);
     }
 
     [HttpPost]
-    public IActionResult Edit(int id, ConsoleFormViewModel form)
+    public async Task<IActionResult> Edit(int id, ConsoleFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
-            return EditView(form);
+            return await EditViewAsync(form, cancellationToken);
         }
 
-        if (!consoles.UpdateConsole(id, form.Name, form.CompanyId))
+        if (!await consoles.UpdateConsoleAsync(id, form.Name, form.CompanyId, cancellationToken))
         {
             return NotFound();
         }
@@ -68,18 +68,18 @@ public class ConsolesController(ConsoleService consoles, CompanyService companie
     }
 
     [HttpPost]
-    public IActionResult Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        if (!consoles.DeleteConsole(id))
+        if (!await consoles.DeleteConsoleAsync(id, cancellationToken))
         {
             return NotFound();
         }
         return RedirectToAction(nameof(Index));
     }
 
-    private ViewResult EditView(ConsoleFormViewModel form)
+    private async Task<ViewResult> EditViewAsync(ConsoleFormViewModel form, CancellationToken cancellationToken)
     {
-        form.CompanyOptions = companies.GetCompanies()
+        form.CompanyOptions = (await companies.GetCompaniesAsync(cancellationToken))
             .Select(c => new SelectListItem(c.Name, c.Id.ToString(CultureInfo.InvariantCulture)))
             .ToList();
         return View("Edit", form);

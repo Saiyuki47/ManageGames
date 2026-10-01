@@ -1,11 +1,10 @@
 using System.Security.Cryptography;
 using ManageGames.Auth;
 using ManageGames.Data;
-using ManageGames.Helpers;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ManageGames.Services;
 
@@ -73,8 +72,7 @@ public class UserService(
     /// </summary>
     public async Task HashPlaintextPasswordsAsync()
     {
-        var users = db.Users
-            .AsEnumerable()
+        var users = (await db.Users.ToListAsync())
             .Where(u => !string.IsNullOrEmpty(u.PasswordHash) && !IsPasswordHash(u.PasswordHash))
             .ToList();
         foreach (var user in users)
@@ -89,33 +87,37 @@ public class UserService(
         }
     }
 
-    public async Task<IdentityResult> CreateUserAsync(string username, string password, bool isAdmin, bool mustChangePassword)
+    public Task<IdentityResult> CreateUserAsync(string username, string password, bool isAdmin, bool mustChangePassword)
     {
-        var user = new AppUser { UserName = username.Trim(), MustChangePassword = mustChangePassword };
+        // Retries after transient connection failures must repeat the whole transaction.
+        return db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            var user = new AppUser { UserName = username.Trim(), MustChangePassword = mustChangePassword };
 
-        // Creating the account and granting the role succeed or fail together.
-        await using var transaction = await db.Database.BeginTransactionAsync();
-        IdentityResult result;
-        try
-        {
-            result = await userManager.CreateAsync(user, password);
-        }
-        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 })
-        {
-            // Identity checks for duplicates first, but a concurrent request can still take the name
-            // before the insert; the unique index then rejects it (SQLITE_CONSTRAINT).
-            db.ChangeTracker.Clear();
-            return IdentityResult.Failed(userManager.ErrorDescriber.DuplicateUserName(user.UserName));
-        }
-        if (result.Succeeded && isAdmin)
-        {
-            result = await userManager.AddToRoleAsync(user, Roles.Admin);
-        }
-        if (result.Succeeded)
-        {
-            await transaction.CommitAsync();
-        }
-        return result;
+            // Creating the account and granting the role succeed or fail together.
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            IdentityResult result;
+            try
+            {
+                result = await userManager.CreateAsync(user, password);
+            }
+            catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                // Identity checks for duplicates first, but a concurrent request can still take the name
+                // before the insert; the unique index then rejects it.
+                db.ChangeTracker.Clear();
+                return IdentityResult.Failed(userManager.ErrorDescriber.DuplicateUserName(user.UserName));
+            }
+            if (result.Succeeded && isAdmin)
+            {
+                result = await userManager.AddToRoleAsync(user, Roles.Admin);
+            }
+            if (result.Succeeded)
+            {
+                await transaction.CommitAsync();
+            }
+            return result;
+        });
     }
 
     /// <summary>
@@ -135,7 +137,7 @@ public class UserService(
         await userManager.UpdateAsync(user);
         await userManager.SetLockoutEndDateAsync(user, null);
         await userManager.ResetAccessFailedCountAsync(user);
-        sessions.EndAll(user.Id);
+        await sessions.EndAllAsync(user.Id);
         return result;
     }
 
@@ -166,10 +168,11 @@ public class UserService(
     public async Task<List<UserListItem>> GetUsersAsync()
     {
         var adminIds = (await userManager.GetUsersInRoleAsync(Roles.Admin)).Select(u => u.Id).ToHashSet();
-        return db.Users
+        var users = await db.Users
             .AsNoTracking()
-            .AsEnumerable()
-            .OrderBy(u => u.UserName, NameOrder.Comparer)
+            .OrderBy(u => u.UserName)
+            .ToListAsync();
+        return users
             .Select(u => new UserListItem(u.Id, u.UserName!, adminIds.Contains(u.Id), u.MustChangePassword, u.CreatedAt))
             .ToList();
     }

@@ -13,7 +13,7 @@ namespace ManageGames.Auth;
 /// </summary>
 public class AuthCookieEvents(SessionService sessions) : CookieAuthenticationEvents
 {
-    public override Task SigningIn(CookieSigningInContext context)
+    public override async Task SigningIn(CookieSigningInContext context)
     {
         if (context.Principal?.Identity is ClaimsIdentity identity
             && Guid.TryParse(identity.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
@@ -23,9 +23,9 @@ public class AuthCookieEvents(SessionService sessions) : CookieAuthenticationEve
             {
                 identity.RemoveClaim(claim);
             }
-            identity.AddClaim(new Claim(UserClaims.SessionIdType, sessions.Start(userId)));
+            var sessionId = await sessions.StartAsync(userId, context.HttpContext.RequestAborted);
+            identity.AddClaim(new Claim(UserClaims.SessionIdType, sessionId));
         }
-        return Task.CompletedTask;
     }
 
     public override async Task ValidatePrincipal(CookieValidatePrincipalContext context)
@@ -35,7 +35,7 @@ public class AuthCookieEvents(SessionService sessions) : CookieAuthenticationEve
         if (principal == null
             || sessionId == null
             || !Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
-            || !sessions.IsActive(sessionId, userId))
+            || !await sessions.IsActiveAsync(sessionId, userId, context.HttpContext.RequestAborted))
         {
             context.RejectPrincipal();
             await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
@@ -47,14 +47,14 @@ public class AuthCookieEvents(SessionService sessions) : CookieAuthenticationEve
         await SecurityStampValidator.ValidatePrincipalAsync(context);
     }
 
-    public override Task SigningOut(CookieSigningOutContext context)
+    public override async Task SigningOut(CookieSigningOutContext context)
     {
         var sessionId = context.HttpContext.User.GetSessionId();
         if (sessionId != null)
         {
-            sessions.End(sessionId);
+            // Not cancelled with the request: the session has to end even if the browser stops waiting.
+            await sessions.EndAsync(sessionId, CancellationToken.None);
         }
-        return Task.CompletedTask;
     }
 
     public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context)

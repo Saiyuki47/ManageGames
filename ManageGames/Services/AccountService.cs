@@ -84,7 +84,7 @@ public class AccountService(
 
         user.MustChangePassword = false;
         await userManager.UpdateAsync(user);
-        sessions.EndAll(user.Id);
+        await sessions.EndAllAsync(user.Id);
         await signInManager.SignInAsync(user, isPersistent: false);
         return result;
     }

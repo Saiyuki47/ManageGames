@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 using ManageGames.Auth;
 using ManageGames.Data;
@@ -37,22 +38,29 @@ builder.Services.Configure<CookieTempDataProviderOptions>(options =>
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 
-// The keys that encrypt the cookies. By default they live in the user profile, which is fine on one
-// machine; in a container, point DataProtection:KeysPath to a persistent volume, otherwise every
-// restart signs everybody out.
-var dataProtection = builder.Services.AddDataProtection().SetApplicationName("ManageGames");
-if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+// The keys that encrypt the cookies live in the database, so every instance of the app shares them
+// and restarts or new containers don't sign anybody out. Outside development, encrypt them with a
+// certificate (DataProtection:CertificatePath), so a copy of the database alone can't forge cookies.
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName("ManageGames")
+    .PersistKeysToDbContext<AppDbContext>();
+if (builder.Configuration["DataProtection:CertificatePath"] is { Length: > 0 } certificatePath)
 {
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+    dataProtection.ProtectKeysWithCertificate(
+        X509CertificateLoader.LoadPkcs12FromFile(certificatePath, builder.Configuration["DataProtection:CertificatePassword"]));
 }
 
-// SQLite database under the content root unless a connection string is configured. The setting is
-// read when a context is created, so configuration overrides (e.g. from the tests) are honored.
-var defaultDbPath = Path.Combine(builder.Environment.ContentRootPath, "DB", "DataBase.db");
-Directory.CreateDirectory(Path.GetDirectoryName(defaultDbPath)!);
+// PostgreSQL. The connection string is read when a context is created, so configuration overrides
+// (e.g. from the tests) are honored. Transient connection failures are retried.
 builder.Services.AddDbContext<AppDbContext>((services, options) =>
-    options.UseSqlite(services.GetRequiredService<IConfiguration>().GetConnectionString("ManageGames")
-        ?? $"Data Source={defaultDbPath}"));
+    options.UseNpgsql(
+        services.GetRequiredService<IConfiguration>().GetConnectionString("ManageGames")
+            ?? throw new InvalidOperationException(
+                "The PostgreSQL connection string ConnectionStrings:ManageGames is not configured (see the README)."),
+        npgsql => npgsql.EnableRetryOnFailure()));
+
+// For load balancers and container platforms: /healthz answers "Healthy" while the database is reachable.
+builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<ConsoleService>();
@@ -61,6 +69,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthCookieEvents>();
+builder.Services.AddScoped<SqliteImporter>();
 
 builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
     {
@@ -157,14 +166,27 @@ builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
 
 var app = builder.Build();
 
-// Apply pending migrations (creates the database on first run), hash passwords that old versions
-// stored in plaintext and create the admin role and the first admin.
+// `dotnet ManageGames.dll import-sqlite <file>` moves the data of an older, SQLite-based installation
+// into the (empty) PostgreSQL database and exits.
+var sqliteImportPath = args is ["import-sqlite", var path] ? path : null;
+
+// Apply pending migrations (creates the database on first run; EF Core locks the database meanwhile, so
+// several instances can start at once), optionally import, hash passwords that old versions stored in
+// plaintext and create the admin role and the first admin.
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.Migrate();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    if (sqliteImportPath != null)
+    {
+        await scope.ServiceProvider.GetRequiredService<SqliteImporter>().ImportAsync(sqliteImportPath);
+    }
     var users = scope.ServiceProvider.GetRequiredService<UserService>();
     await users.HashPlaintextPasswordsAsync();
     await users.EnsureInitialAdminAsync(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
+}
+if (sqliteImportPath != null)
+{
+    return;
 }
 
 // Configure the HTTP request pipeline.
@@ -187,6 +209,7 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
+app.MapHealthChecks("/healthz").AllowAnonymous();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

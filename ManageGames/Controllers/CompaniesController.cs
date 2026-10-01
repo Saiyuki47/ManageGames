@@ -11,11 +11,11 @@ namespace ManageGames.Controllers;
 [Authorize(Roles = Roles.Admin)]
 public class CompaniesController(CompanyService companies) : Controller
 {
-    public IActionResult Index(string? search)
+    public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken)
     {
         return View(new CompanyListViewModel
         {
-            Companies = SearchFilter.Filter(companies.GetCompanies(), search, c => c.Name),
+            Companies = SearchFilter.Filter(await companies.GetCompaniesAsync(cancellationToken), search, c => c.Name),
             Search = search,
         });
     }
@@ -27,21 +27,21 @@ public class CompaniesController(CompanyService companies) : Controller
     }
 
     [HttpPost]
-    public IActionResult Create(CompanyFormViewModel form)
+    public async Task<IActionResult> Create(CompanyFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
             return View("Edit", form);
         }
 
-        companies.AddCompany(form.Name);
+        await companies.AddCompanyAsync(form.Name, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
-    public IActionResult Edit(int id)
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
-        var company = companies.GetCompany(id);
+        var company = await companies.GetCompanyAsync(id, cancellationToken);
         if (company == null)
         {
             return NotFound();
@@ -51,14 +51,14 @@ public class CompaniesController(CompanyService companies) : Controller
     }
 
     [HttpPost]
-    public IActionResult Edit(int id, CompanyFormViewModel form)
+    public async Task<IActionResult> Edit(int id, CompanyFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
             return View(form);
         }
 
-        if (!companies.UpdateCompany(id, form.Name))
+        if (!await companies.UpdateCompanyAsync(id, form.Name, cancellationToken))
         {
             return NotFound();
         }
@@ -66,9 +66,9 @@ public class CompaniesController(CompanyService companies) : Controller
     }
 
     [HttpPost]
-    public IActionResult Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        if (!companies.DeleteCompany(id))
+        if (!await companies.DeleteCompanyAsync(id, cancellationToken))
         {
             return NotFound();
         }

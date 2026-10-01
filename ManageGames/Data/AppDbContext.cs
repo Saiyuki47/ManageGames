@@ -1,32 +1,52 @@
 using ManageGames.Models;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace ManageGames.Data;
 
-/// <summary>The app's data plus the ASP.NET Core Identity tables (AspNetUsers, AspNetRoles, ...).</summary>
+/// <summary>
+/// The app's data plus the ASP.NET Core Identity tables (AspNetUsers, AspNetRoles, ...) and the keys that
+/// encrypt the cookies, in PostgreSQL.
+/// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options)
-    : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options)
+    : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options), IDataProtectionKeyContext
 {
+    /// <summary>
+    /// Collation of names: Unicode-aware and ordered like a dictionary, so "Ökami" sorts next to "Okami"
+    /// and case doesn't decide the order. Equality stays exact (deterministic), so LIKE and indexes work.
+    /// </summary>
+    public const string NameCollation = "names";
+
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<GameConsole> Consoles => Set<GameConsole>();
     public DbSet<Game> Games => Set<Game>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
+    // Shared by all instances of the app, so a cookie issued by one instance is accepted by the others.
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<GameConsole>()
-            .HasOne(c => c.Company)
-            .WithMany()
-            .HasForeignKey(c => c.CompanyId)
-            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasCollation(NameCollation, locale: "und", provider: "icu", deterministic: true);
+        builder.Entity<AppUser>().Property(u => u.UserName).UseCollation(NameCollation);
+        builder.Entity<Company>().Property(c => c.Name).UseCollation(NameCollation);
+
+        builder.Entity<GameConsole>(e =>
+        {
+            e.Property(c => c.Name).UseCollation(NameCollation);
+            e.HasOne(c => c.Company)
+             .WithMany()
+             .HasForeignKey(c => c.CompanyId)
+             .OnDelete(DeleteBehavior.SetNull);
+        });
 
         builder.Entity<Game>(e =>
         {
+            e.Property(g => g.Name).UseCollation(NameCollation);
             e.HasOne(g => g.Console)
              .WithMany()
              .HasForeignKey(g => g.ConsoleId)
@@ -36,6 +56,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
              .WithMany()
              .HasForeignKey(g => g.UserId)
              .OnDelete(DeleteBehavior.Cascade);
+            // The game lists filter by owner and wishlist flag.
+            e.HasIndex(g => new { g.UserId, g.IsOnWishList });
         });
 
         builder.Entity<UserSession>(e =>
@@ -45,10 +67,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
              .HasForeignKey(s => s.UserId)
              .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(s => s.UserId);
+            e.HasIndex(s => s.ExpiresAt);
         });
 
-        // Every ITimestamped entity gets a DB-side default so rows inserted outside EF
-        // (or backfilled by a migration) still receive a sensible timestamp.
+        // Every ITimestamped entity gets a DB-side default so rows inserted outside EF still receive a
+        // sensible timestamp.
         foreach (var entityType in builder.Model.GetEntityTypes())
         {
             if (typeof(ITimestamped).IsAssignableFrom(entityType.ClrType))
@@ -58,13 +81,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
                 entity.Property(nameof(ITimestamped.UpdatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
             }
         }
-    }
-
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    {
-        // All timestamps are stored in UTC. SQLite has no date type, so without this they would be
-        // read back with an unspecified kind and could not be converted to local time for display.
-        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
     }
 
     // Override the most-derived overloads: the parameterless SaveChanges()/SaveChangesAsync()
@@ -81,7 +97,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
-    // Sets CreatedAt/UpdatedAt automatically so services never have to touch them.
+    // Sets CreatedAt/UpdatedAt automatically so services never have to touch them. Values that are
+    // already set on new rows are kept, so imported data keeps its original timestamps.
     private void ApplyTimestamps()
     {
         var now = DateTime.UtcNow;
@@ -89,8 +106,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             if (entry.State == EntityState.Added)
             {
-                entry.Entity.CreatedAt = now;
-                entry.Entity.UpdatedAt = now;
+                if (entry.Entity.CreatedAt == default)
+                {
+                    entry.Entity.CreatedAt = now;
+                }
+                if (entry.Entity.UpdatedAt == default)
+                {
+                    entry.Entity.UpdatedAt = now;
+                }
             }
             else if (entry.State == EntityState.Modified)
             {
@@ -98,8 +121,4 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             }
         }
     }
-
-    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
-        value => value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value,
-        value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

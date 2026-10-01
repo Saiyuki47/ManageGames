@@ -13,62 +13,62 @@ namespace ManageGames.Controllers;
 [Authorize]
 public class GamesController(GameService games, ConsoleService consoles) : Controller
 {
-    public IActionResult Index(string? search)
+    public Task<ViewResult> Index(string? search, CancellationToken cancellationToken)
     {
-        return List(onWishList: false, search);
+        return ListAsync(onWishList: false, search, cancellationToken);
     }
 
-    public IActionResult Wishlist(string? search)
+    public Task<ViewResult> Wishlist(string? search, CancellationToken cancellationToken)
     {
-        return List(onWishList: true, search);
+        return ListAsync(onWishList: true, search, cancellationToken);
     }
 
     [HttpGet]
-    public IActionResult Create(bool wishlist = false)
+    public Task<ViewResult> Create(bool wishlist = false, CancellationToken cancellationToken = default)
     {
-        return EditView(new GameFormViewModel { OnWishList = wishlist });
+        return EditViewAsync(new GameFormViewModel { OnWishList = wishlist }, cancellationToken);
     }
 
     [HttpPost]
-    public IActionResult Create(GameFormViewModel form)
+    public async Task<IActionResult> Create(GameFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
-            return EditView(form);
+            return await EditViewAsync(form, cancellationToken);
         }
 
-        games.AddGame(User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList);
+        await games.AddGameAsync(User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken);
         return RedirectToList(form.OnWishList);
     }
 
     [HttpGet]
-    public IActionResult Edit(int id)
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
-        var game = games.GetGame(id, User.GetUserId());
+        var game = await games.GetGameAsync(id, User.GetUserId(), cancellationToken);
         if (game == null)
         {
             return NotFound();
         }
 
-        return EditView(new GameFormViewModel
+        return await EditViewAsync(new GameFormViewModel
         {
             Id = game.Id,
             Name = game.Name,
             ConsoleId = game.ConsoleId,
             Copies = game.Copies,
             OnWishList = game.IsOnWishList,
-        });
+        }, cancellationToken);
     }
 
     [HttpPost]
-    public IActionResult Edit(int id, GameFormViewModel form)
+    public async Task<IActionResult> Edit(int id, GameFormViewModel form, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
-            return EditView(form);
+            return await EditViewAsync(form, cancellationToken);
         }
 
-        if (!games.UpdateGame(id, User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList))
+        if (!await games.UpdateGameAsync(id, User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken))
         {
             return NotFound();
         }
@@ -76,9 +76,9 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
     }
 
     [HttpPost]
-    public IActionResult Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        var game = games.DeleteGame(id, User.GetUserId());
+        var game = await games.DeleteGameAsync(id, User.GetUserId(), cancellationToken);
         if (game == null)
         {
             return NotFound();
@@ -86,9 +86,9 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
         return RedirectToList(game.IsOnWishList);
     }
 
-    private ViewResult List(bool onWishList, string? search)
+    private async Task<ViewResult> ListAsync(bool onWishList, string? search, CancellationToken cancellationToken)
     {
-        var ownGames = games.GetGames(User.GetUserId(), onWishList);
+        var ownGames = await games.GetGamesAsync(User.GetUserId(), onWishList, cancellationToken);
         return View("Index", new GameListViewModel
         {
             Games = SearchFilter.Filter(ownGames, search, g => g.Name),
@@ -97,9 +97,9 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
         });
     }
 
-    private ViewResult EditView(GameFormViewModel form)
+    private async Task<ViewResult> EditViewAsync(GameFormViewModel form, CancellationToken cancellationToken)
     {
-        form.ConsoleOptions = consoles.GetConsoles()
+        form.ConsoleOptions = (await consoles.GetConsolesAsync(cancellationToken))
             .Select(c => new SelectListItem(c.Name, c.Id.ToString(CultureInfo.InvariantCulture)))
             .ToList();
         return View("Edit", form);
