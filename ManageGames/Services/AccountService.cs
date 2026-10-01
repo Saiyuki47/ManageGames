@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using ManageGames.Auth;
 using ManageGames.Models;
 using Microsoft.AspNetCore.Identity;
 
@@ -16,8 +15,7 @@ public enum LoginResult
 public class AccountService(
     UserManager<AppUser> userManager,
     SignInManager<AppUser> signInManager,
-    SessionService sessions,
-    ILogger<AccountService> logger)
+    SessionService sessions)
 {
     // Verifying against this hash when no password check happens (unknown user, locked account) makes
     // that failure take as long as a wrong password, so response times don't reveal which usernames
@@ -44,14 +42,6 @@ public class AccountService(
         if (!result.Succeeded)
         {
             return LoginResult.Failed;
-        }
-
-        // Passwords set under an older, weaker policy still work once, but have to be replaced now.
-        if (!user.MustChangePassword && !await MeetsPolicyAsync(user, password))
-        {
-            user.MustChangePassword = true;
-            await userManager.UpdateAsync(user);
-            logger.PasswordBelowPolicy(user.UserName!);
         }
 
         await signInManager.SignInAsync(user, isPersistent: false);
@@ -89,17 +79,6 @@ public class AccountService(
         return result;
     }
 
-    private async Task<bool> MeetsPolicyAsync(AppUser user, string password)
-    {
-        foreach (var validator in userManager.PasswordValidators)
-        {
-            if (!(await validator.ValidateAsync(userManager, user, password)).Succeeded)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
 
     private void SpendHashingTime(string password)
     {

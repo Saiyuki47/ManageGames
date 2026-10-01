@@ -15,7 +15,7 @@ public static class SecurityHeaders
             var headers = context.Response.Headers;
             headers.ContentSecurityPolicy = ContentSecurityPolicy;
             headers.XContentTypeOptions = "nosniff";
-            // Older browsers that don't know frame-ancestors (the antiforgery system would add SAMEORIGIN otherwise).
+            // Alongside frame-ancestors, as OWASP recommends; it also keeps the antiforgery system from adding SAMEORIGIN.
             headers.XFrameOptions = "DENY";
             headers["Referrer-Policy"] = "same-origin";
             headers["Cross-Origin-Opener-Policy"] = "same-origin";

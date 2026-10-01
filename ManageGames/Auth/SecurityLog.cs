@@ -28,9 +28,6 @@ public static partial class SecurityLog
     [LoggerMessage(EventId = 1011, Level = LogLevel.Warning, Message = "User '{Username}' entered a wrong current password while changing it.")]
     public static partial void PasswordChangeRejected(this ILogger logger, string? username);
 
-    [LoggerMessage(EventId = 1012, Level = LogLevel.Information, Message = "The password of '{Username}' no longer meets the policy; they have to change it.")]
-    public static partial void PasswordBelowPolicy(this ILogger logger, string username);
-
     [LoggerMessage(EventId = 1020, Level = LogLevel.Information, Message = "Admin '{Admin}' created user '{Username}' (admin: {IsAdmin}).")]
     public static partial void UserCreated(this ILogger logger, string? admin, string username, bool isAdmin);
 
@@ -43,6 +40,9 @@ public static partial class SecurityLog
     [LoggerMessage(EventId = 1030, Level = LogLevel.Warning, Message = "Created the initial admin account '{Username}' with the one-time password '{Password}'. You will be asked to choose your own password after logging in.")]
     public static partial void InitialAdminCreated(this ILogger logger, string username, string password);
 
-    [LoggerMessage(EventId = 1031, Level = LogLevel.Warning, Message = "Hashed the plaintext passwords of {Count} user(s). They have to choose a new password at their next login.")]
-    public static partial void PlaintextPasswordsHashed(this ILogger logger, int count);
+    [LoggerMessage(EventId = 1031, Level = LogLevel.Warning, Message = "The password of '{Username}' was reset from the command line. One-time password: '{Password}'. It has to be replaced at the next login.")]
+    public static partial void OneTimePasswordIssued(this ILogger logger, string username, string password);
+
+    [LoggerMessage(EventId = 1032, Level = LogLevel.Error, Message = "There is no user '{Username}'; no password was reset.")]
+    public static partial void PasswordResetUserNotFound(this ILogger logger, string username);
 }

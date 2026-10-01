@@ -24,9 +24,4 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Schemas of the old SQLite versions, for the import tests (generated from their migrations). -->
-    <None Include="LegacySqlite\*.sql" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

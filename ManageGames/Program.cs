@@ -69,7 +69,6 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthCookieEvents>();
-builder.Services.AddScoped<SqliteImporter>();
 
 builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
     {
@@ -166,27 +165,22 @@ builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
 
 var app = builder.Build();
 
-// `dotnet ManageGames.dll import-sqlite <file>` moves the data of an older, SQLite-based installation
-// into the (empty) PostgreSQL database and exits.
-var sqliteImportPath = args is ["import-sqlite", var path] ? path : null;
-
-// Apply pending migrations (creates the database on first run; EF Core locks the database meanwhile, so
-// several instances can start at once), optionally import, hash passwords that old versions stored in
-// plaintext and create the admin role and the first admin.
+// Apply pending migrations: on the first run they create the database, the tables and the starting
+// data (consoles and their makers). EF Core locks the database meanwhile, so several instances can
+// start at once. Then create the admin role and, on an empty database, the first admin.
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
-    if (sqliteImportPath != null)
-    {
-        await scope.ServiceProvider.GetRequiredService<SqliteImporter>().ImportAsync(sqliteImportPath);
-    }
     var users = scope.ServiceProvider.GetRequiredService<UserService>();
-    await users.HashPlaintextPasswordsAsync();
     await users.EnsureInitialAdminAsync(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
-}
-if (sqliteImportPath != null)
-{
-    return;
+
+    // `dotnet ManageGames.dll reset-password <username>`: prints a one-time password for the account and
+    // exits, for when nobody can log in anymore.
+    if (args is ["reset-password", var username])
+    {
+        Environment.ExitCode = await users.ResetToOneTimePasswordAsync(username) == null ? 1 : 0;
+        return;
+    }
 }
 
 // Configure the HTTP request pipeline.

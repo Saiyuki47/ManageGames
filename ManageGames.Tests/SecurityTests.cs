@@ -1,13 +1,11 @@
 using System.Buffers.Binary;
 using System.Net;
 using ManageGames.Auth;
-using ManageGames.Models;
 using ManageGames.Tests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace ManageGames.Tests;
 
@@ -57,25 +55,6 @@ public class SecurityTests(ManageGamesFactory factory) : IClassFixture<ManageGam
 
         var hash = factory.Query(db => db.Users.Single(u => u.UserName == user.Username).PasswordHash)!;
 
-        Assert.Equal(PasswordPolicy.HashIterationCount, IterationCount(hash));
-    }
-
-    [Fact]
-    public async Task WeakerHashes_AreUpgradedAtTheNextLogin()
-    {
-        var username = ManageGamesFactory.Unique("legacy-hash");
-        var oldHasher = new PasswordHasher<AppUser>(Options.Create(new PasswordHasherOptions { IterationCount = 100_000 }));
-        await factory.WithServiceAsync<UserManager<AppUser>, IdentityResult>(async users =>
-        {
-            var user = new AppUser { UserName = username };
-            await users.CreateAsync(user);
-            user.PasswordHash = oldHasher.HashPassword(user, ManageGamesFactory.UserPassword);
-            return await users.UpdateAsync(user);
-        });
-
-        await factory.SignInAsync(username, ManageGamesFactory.UserPassword);
-
-        var hash = factory.Query(db => db.Users.Single(u => u.UserName == username).PasswordHash)!;
         Assert.Equal(PasswordPolicy.HashIterationCount, IterationCount(hash));
     }
 

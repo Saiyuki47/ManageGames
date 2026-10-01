@@ -361,7 +361,3 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-
-# SQLite database of versions up to e741e94 (now PostgreSQL; see "Moving from an older SQLite
-# installation" in the README). It holds password hashes, so the whole folder stays ignored.
-ManageGames/DB/

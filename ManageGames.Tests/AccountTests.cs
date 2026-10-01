@@ -1,5 +1,6 @@
 using System.Net;
 using ManageGames.Models;
+using ManageGames.Services;
 using ManageGames.Tests.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 
@@ -110,24 +111,6 @@ public class AccountTests(ManageGamesFactory factory) : IClassFixture<ManageGame
     }
 
     [Fact]
-    public async Task PasswordBelowTheCurrentPolicy_StillWorks_ButMustBeChanged()
-    {
-        var username = ManageGamesFactory.Unique("old-timer");
-        // A password from before the 15-character rule, stored without going through the validators.
-        await factory.WithServiceAsync<UserManager<AppUser>, IdentityResult>(async users =>
-        {
-            var user = new AppUser { UserName = username };
-            await users.CreateAsync(user);
-            user.PasswordHash = users.PasswordHasher.HashPassword(user, "old-secret-9");
-            return await users.UpdateAsync(user);
-        });
-
-        var browser = await factory.SignInAsync(username, "old-secret-9");
-
-        Browser.AssertRedirect(await browser.GetAsync("/Games"), "/Account/ChangePassword");
-    }
-
-    [Fact]
     public async Task ResetPassword_EndsTheUsersSessions_AndForcesANewPassword()
     {
         var user = await factory.CreateUserAsync();
@@ -159,6 +142,31 @@ public class AccountTests(ManageGamesFactory factory) : IClassFixture<ManageGame
             new Dictionary<string, string> { ["NewPassword"] = "Temporary-Password-1" }), "/Users");
 
         await factory.SignInAsync(user.Username, "Temporary-Password-1");
+    }
+
+    [Fact]
+    public async Task CommandLineReset_IssuesAOneTimePassword_ThatMustBeReplaced()
+    {
+        var user = await factory.CreateUserAsync();
+        var oldSession = await factory.SignInAsync(user);
+        var locker = factory.CreateBrowser();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await locker.LoginAsync(user.Username, $"wrong-password-{attempt}");
+        }
+
+        var oneTimePassword = await factory.WithServiceAsync<UserService, string?>(users => users.ResetToOneTimePasswordAsync(user.Username));
+
+        Assert.NotNull(oneTimePassword);
+        Browser.AssertRedirect(await oldSession.GetAsync("/Games"), "/?ReturnUrl=%2FGames");
+        var browser = await factory.SignInAsync(user.Username, oneTimePassword);
+        Browser.AssertRedirect(await browser.GetAsync("/Games"), "/Account/ChangePassword");
+    }
+
+    [Fact]
+    public async Task CommandLineReset_OfAnUnknownUser_ChangesNothing()
+    {
+        Assert.Null(await factory.WithServiceAsync<UserService, string?>(users => users.ResetToOneTimePasswordAsync("nobody-at-all")));
     }
 
     [Fact]

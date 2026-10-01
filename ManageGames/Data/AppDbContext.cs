@@ -97,8 +97,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
-    // Sets CreatedAt/UpdatedAt automatically so services never have to touch them. Values that are
-    // already set on new rows are kept, so imported data keeps its original timestamps.
+    // Sets CreatedAt/UpdatedAt automatically so services never have to touch them.
     private void ApplyTimestamps()
     {
         var now = DateTime.UtcNow;
@@ -106,14 +105,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             if (entry.State == EntityState.Added)
             {
-                if (entry.Entity.CreatedAt == default)
-                {
-                    entry.Entity.CreatedAt = now;
-                }
-                if (entry.Entity.UpdatedAt == default)
-                {
-                    entry.Entity.UpdatedAt = now;
-                }
+                entry.Entity.CreatedAt = now;
+                entry.Entity.UpdatedAt = now;
             }
             else if (entry.State == EntityState.Modified)
             {

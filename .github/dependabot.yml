@@ -14,7 +14,6 @@ updates:
           - "Microsoft.AspNetCore.*"
           - "Microsoft.EntityFrameworkCore*"
           - "Microsoft.Extensions.*"
-          - "Microsoft.Data.Sqlite"
           - "Npgsql*"
           - "dotnet-ef"
       tests:

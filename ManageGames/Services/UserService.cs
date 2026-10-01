@@ -17,7 +17,7 @@ public enum DeleteUserResult
 
 public record UserListItem(Guid Id, string UserName, bool IsAdmin, bool MustChangePassword, DateTime CreatedAt);
 
-/// <summary>User administration and the first-start setup, on top of ASP.NET Core Identity.</summary>
+/// <summary>User administration, the first-start setup and password recovery, on top of ASP.NET Core Identity.</summary>
 public class UserService(
     AppDbContext db,
     UserManager<AppUser> userManager,
@@ -53,38 +53,31 @@ public class UserService(
             return;
         }
 
-        IdentityResult result;
-        string oneTimePassword;
-        do
-        {
-            oneTimePassword = RandomNumberGenerator.GetString(PasswordAlphabet, GeneratedPasswordLength);
-            result = await CreateUserAsync(username, oneTimePassword, isAdmin: true, mustChangePassword: true);
-        }
-        while (result.Errors.Any(e => e.Code == CommonPasswordValidator.ErrorCode));
+        var (result, oneTimePassword) = await WithOneTimePasswordAsync(
+            password => CreateUserAsync(username, password, isAdmin: true, mustChangePassword: true));
         ThrowIfFailed(result, "Creating the initial admin failed");
         logger.InitialAdminCreated(username, oneTimePassword);
     }
 
     /// <summary>
-    /// Versions before the EF Core rewrite stored passwords in plaintext, which the hasher can't
-    /// verify (it throws on values that aren't Base64). Hashes them once; since the plaintext may
-    /// have been exposed, those users have to choose a new password and their sessions end.
+    /// Recovery for when nobody can log in anymore, e.g. because the only admin forgot their password
+    /// (<c>reset-password &lt;username&gt;</c> on the command line). Gives the account a random one-time
+    /// password and logs it once; like an admin's reset, it lifts a lockout, ends all sessions and the
+    /// user has to choose a new password at the next login. Returns null when the user doesn't exist.
     /// </summary>
-    public async Task HashPlaintextPasswordsAsync()
+    public async Task<string?> ResetToOneTimePasswordAsync(string username)
     {
-        var users = (await db.Users.ToListAsync())
-            .Where(u => !string.IsNullOrEmpty(u.PasswordHash) && !IsPasswordHash(u.PasswordHash))
-            .ToList();
-        foreach (var user in users)
+        var user = await userManager.FindByNameAsync(username);
+        if (user == null)
         {
-            user.PasswordHash = userManager.PasswordHasher.HashPassword(user, user.PasswordHash!);
-            user.MustChangePassword = true;
-            await userManager.UpdateSecurityStampAsync(user);
+            logger.PasswordResetUserNotFound(username);
+            return null;
         }
-        if (users.Count > 0)
-        {
-            logger.PlaintextPasswordsHashed(users.Count);
-        }
+
+        var (result, oneTimePassword) = await WithOneTimePasswordAsync(password => ResetPasswordAsync(user, password));
+        ThrowIfFailed(result, "Resetting the password failed");
+        logger.OneTimePasswordIssued(user.UserName!, oneTimePassword);
+        return oneTimePassword;
     }
 
     public Task<IdentityResult> CreateUserAsync(string username, string password, bool isAdmin, bool mustChangePassword)
@@ -177,6 +170,20 @@ public class UserService(
             .ToList();
     }
 
+    // Generates random passwords until one passes the password rules (a random one is rarely guessable).
+    private static async Task<(IdentityResult Result, string Password)> WithOneTimePasswordAsync(Func<string, Task<IdentityResult>> apply)
+    {
+        while (true)
+        {
+            var password = RandomNumberGenerator.GetString(PasswordAlphabet, GeneratedPasswordLength);
+            var result = await apply(password);
+            if (!result.Errors.Any(e => e.Code == CommonPasswordValidator.ErrorCode))
+            {
+                return (result, password);
+            }
+        }
+    }
+
     private static void ThrowIfFailed(IdentityResult result, string message)
     {
         if (!result.Succeeded)
@@ -185,15 +192,4 @@ public class UserService(
         }
     }
 
-    // PasswordHasher output is Base64 with a format marker: 0x00 for the Identity v2 format (always
-    // 49 bytes) or 0x01 for v3 (a 13-byte header followed by salt and subkey).
-    private static bool IsPasswordHash(string value)
-    {
-        var bytes = new byte[value.Length];
-        if (!Convert.TryFromBase64String(value, bytes, out var length) || length == 0)
-        {
-            return false;
-        }
-        return (bytes[0] == 0x00 && length == 49) || (bytes[0] == 0x01 && length > 13);
-    }
 }

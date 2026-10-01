@@ -25,7 +25,7 @@ public class ManageGamesFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string UserPassword = "Quiet-Maple-Rocket-17";
 
     /// <summary>The database of this factory's app; dropped when the factory is disposed.</summary>
-    public string ConnectionString { get; protected set; } = string.Empty;
+    public string ConnectionString { get; private set; } = string.Empty;
 
     /// <summary>Password of the seeded admin; null lets the app generate a one-time password.</summary>
     protected virtual string? SeedAdminPassword => AdminPassword;
