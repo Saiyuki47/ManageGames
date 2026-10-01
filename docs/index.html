@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ManageGames — game collection manager</title>
-<meta name="description" content="ManageGames — a self-hosted ASP.NET Core app to organize your video game collection: games, consoles, companies and a wishlist, each behind your own account.">
+<meta name="description" content="ManageGames — a self-hosted ASP.NET Core app to organize your video game collection: games, consoles, companies and a wishlist, each behind your own account. Starts with a catalog of 63 consoles.">
 <style>
   :root {
     --bg: #f7f8fa;
@@ -77,7 +77,7 @@
   h2 { font-size: 28px; letter-spacing: -.02em; margin: 0 0 8px; text-align: center; }
   .section-sub { text-align: center; color: var(--muted); margin: 0 auto 36px; max-width: 560px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 24px; box-shadow: var(--shadow);
@@ -104,6 +104,8 @@
   pre .c { color: #7a8699; }
   pre .p { color: #b48cff; }
   .note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 18px; }
+  .note + .note { margin-top: 6px; }
+  .note code { font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
 
   footer { border-top: 1px solid var(--border); padding: 32px 0 48px; text-align: center; color: var(--muted); font-size: 14px; }
   footer a { color: var(--muted); }
@@ -127,10 +129,12 @@
       <h2>What it does</h2>
       <p class="section-sub">A small, focused collection manager — no clutter, just your library.</p>
       <div class="grid">
-        <div class="card"><div class="ico">🎮</div><h3>Your game library</h3><p>Add, edit and remove games, track how many copies you own, and search your collection.</p></div>
-        <div class="card"><div class="ico">🕹️</div><h3>Consoles &amp; makers</h3><p>Group games by console and link each console to the company that makes it.</p></div>
+        <div class="card"><div class="ico">🎮</div><h3>Your game library</h3><p>Add, edit and remove games, track how many copies you own, and search your collection — ignoring case and spaces.</p></div>
         <div class="card"><div class="ico">⭐</div><h3>Wishlist</h3><p>Flag the games you still want and keep them on a separate wishlist.</p></div>
-        <div class="card"><div class="ico">🔒</div><h3>Personal accounts</h3><p>Log in and see only your own collection — data is scoped per user, server-side. Admins manage the shared consoles, companies and user accounts.</p></div>
+        <div class="card"><div class="ico">🕹️</div><h3>Ready-made console catalog</h3><p>Starts with 63 consoles of 23 makers, from the Magnavox Odyssey to the Nintendo Switch 2, each linked to its maker. Admins can extend and change it.</p></div>
+        <div class="card"><div class="ico">👥</div><h3>Several users</h3><p>One installation for family or friends: everybody logs in and sees only their own collection. Admins manage the accounts and the shared catalog.</p></div>
+        <div class="card"><div class="ico">🔒</div><h3>Secure by default</h3><p>Strongly hashed passwords with NIST rules, account lockout, sessions you can end per device, and strict security headers.</p></div>
+        <div class="card"><div class="ico">🚀</div><h3>Ready to host</h3><p>Runs on PostgreSQL behind a reverse proxy, with a health endpoint and sessions shared between several instances.</p></div>
       </div>
     </div>
   </section>
@@ -138,15 +142,16 @@
   <section id="tech" style="padding-top: 0;">
     <div class="wrap">
       <h2>Built with</h2>
-      <p class="section-sub">A modern .NET stack with a clean, migration-driven data layer.</p>
+      <p class="section-sub">A modern .NET stack with a migration-driven data layer, tested against a real database.</p>
       <div class="badges">
         <span class="tech">ASP.NET Core MVC</span>
         <span class="tech">.NET 10</span>
         <span class="tech">Entity Framework Core</span>
-        <span class="tech">PostgreSQL</span>
+        <span class="tech">PostgreSQL 18</span>
         <span class="tech">ASP.NET Core Identity</span>
-        <span class="tech">EF Core Migrations</span>
-        <span class="tech">xUnit integration tests</span>
+        <span class="tech">Docker Compose</span>
+        <span class="tech">Bootstrap 5.3</span>
+        <span class="tech">xUnit v3 + Testcontainers</span>
       </div>
     </div>
   </section>
@@ -156,16 +161,19 @@
       <h2>Run it locally</h2>
       <p class="section-sub">It's a server app with its own database, so it runs on your machine — not on this page.</p>
       <div class="run">
-<pre><span class="c"># clone and start</span>
+<pre><span class="c"># clone, start the database, start the app</span>
 <span class="p">git</span> clone https://github.com/Saiyuki47/ManageGames.git
 <span class="p">cd</span> ManageGames
+<span class="p">docker</span> compose up -d            <span class="c"># local PostgreSQL 18</span>
 <span class="p">dotnet</span> run --project ManageGames
 
 <span class="c"># then open https://localhost:7200</span>
-<span class="c"># the first start creates the account "admin" and prints its one-time</span>
-<span class="c"># password to the console; you choose your own at the first login</span></pre>
+<span class="c"># the first start creates the tables, fills in the console catalog and</span>
+<span class="c"># creates the account "admin"; its one-time password is printed to the</span>
+<span class="c"># console, and you choose your own password at the first login</span></pre>
       </div>
-      <p class="note">Requires the .NET 10 SDK. The database is created automatically on first start.</p>
+      <p class="note">Requires the .NET 10 SDK and Docker, which runs the database.</p>
+      <p class="note">Forgot your password? <code>dotnet run --project ManageGames -- reset-password &lt;username&gt;</code></p>
     </div>
   </section>
 
