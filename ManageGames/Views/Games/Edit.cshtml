@@ -39,3 +39,42 @@
         </div>
     </fieldset>
 </form>
+
+@if (!isNew)
+{
+    <section class="edit-form cover-editor" aria-labelledby="cover-heading">
+        <fieldset>
+            <legend id="cover-heading">Cover</legend>
+            <div class="cover-current">
+                @if (Model.Cover is { } cover)
+                {
+                    <img class="cover-large" src="@Url.Action("Image", "Covers", new { id = Model.Id, v = cover.Version.ToString("N") })" alt="Cover of @Model.Name" />
+                    <p class="form-hint">@(cover.Source == GameCover.UploadSource ? "Uploaded by you." : $"Cover from {cover.Source}.")</p>
+                }
+                else
+                {
+                    <span class="cover-large cover-placeholder" aria-hidden="true"></span>
+                    <p class="form-hint">No cover yet.</p>
+                }
+            </div>
+
+            <div class="cover-actions">
+                <a class="button-link" asp-controller="Covers" asp-action="Edit" asp-route-id="@Model.Id">Find a cover</a>
+
+                <form asp-controller="Covers" asp-action="Upload" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="cover-upload">
+                    <label for="cover-file" class="visually-hidden">Image file</label>
+                    <input type="file" id="cover-file" name="file" accept="@ManageGames.Services.Covers.CoverImage.AcceptedTypes" required />
+                    <button type="submit">Upload</button>
+                </form>
+
+                @if (Model.Cover != null)
+                {
+                    <form asp-controller="Covers" asp-action="Remove" asp-route-id="@Model.Id" method="post" data-confirm="Remove the cover?">
+                        <button type="submit">Remove cover</button>
+                    </form>
+                }
+            </div>
+            <p class="form-hint">JPEG, PNG, WebP or GIF, at most 5 MB.</p>
+        </fieldset>
+    </section>
+}

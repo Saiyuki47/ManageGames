@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace ManageGames.Controllers;
 
-/// <summary>The signed-in user's own game collection and wishlist.</summary>
+/// <summary>The signed-in user's own game collection and wishlist. The covers are handled by <see cref="CoversController"/>.</summary>
 [Authorize]
-public class GamesController(GameService games, ConsoleService consoles) : Controller
+public class GamesController(GameService games, ConsoleService consoles, CoverService covers) : Controller
 {
     public Task<ViewResult> Index(string? search, CancellationToken cancellationToken)
     {
@@ -37,7 +37,10 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
             return await EditViewAsync(form, cancellationToken);
         }
 
-        await games.AddGameAsync(User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken);
+        var userId = User.GetUserId();
+        var gameId = await games.AddGameAsync(userId, form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken);
+        // Waits for the cover (within a time limit), so the list shows it right away.
+        await covers.FindMissingCoverAsync(gameId, userId, cancellationToken);
         return RedirectToList(form.OnWishList);
     }
 
@@ -68,9 +71,17 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
             return await EditViewAsync(form, cancellationToken);
         }
 
-        if (!await games.UpdateGameAsync(id, User.GetUserId(), form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken))
+        var userId = User.GetUserId();
+        var before = await games.GetGameAsync(id, userId, cancellationToken);
+        if (before == null || !await games.UpdateGameAsync(id, userId, form.Name, form.Copies, form.ConsoleId, form.OnWishList, cancellationToken))
         {
             return NotFound();
+        }
+
+        // A corrected title or console may find the cover the first search missed.
+        if (!string.Equals(before.Name, form.Name.Trim(), StringComparison.Ordinal) || before.ConsoleId != form.ConsoleId)
+        {
+            await covers.FindMissingCoverAsync(id, userId, cancellationToken);
         }
         return RedirectToList(form.OnWishList);
     }
@@ -102,6 +113,10 @@ public class GamesController(GameService games, ConsoleService consoles) : Contr
         form.ConsoleOptions = (await consoles.GetConsolesAsync(cancellationToken))
             .Select(c => new SelectListItem(c.Name, c.Id.ToString(CultureInfo.InvariantCulture)))
             .ToList();
+        if (form.Id is { } id)
+        {
+            form.Cover = await covers.GetCoverInfoAsync(id, User.GetUserId(), cancellationToken);
+        }
         return View("Edit", form);
     }
 

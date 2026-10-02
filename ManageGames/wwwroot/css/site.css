@@ -262,3 +262,112 @@ button,
     gap: 5px;
     margin-top: 10px;
 }
+
+/* Covers: thumbnails in the lists, the large one on the edit page and the results to pick from. */
+.cover-cell {
+    width: 1%;
+}
+
+.cover-thumb {
+    display: block;
+    width: 45px;
+    height: 64px;
+    object-fit: cover;
+}
+
+.cover-placeholder {
+    border: 1px dashed #adb5bd;
+    background-color: #f1f3f5;
+}
+
+.cover-editor {
+    margin-top: 20px;
+}
+
+.cover-current {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.cover-large {
+    display: block;
+    width: 180px;
+    height: 255px;
+    object-fit: contain;
+}
+
+.cover-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+    .cover-actions form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+        margin: 0;
+    }
+
+    .cover-upload input[type=file] {
+        max-width: 230px;
+    }
+
+.cover-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 10px 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .cover-results form {
+        height: 100%;
+        margin: 0;
+    }
+
+/* A whole result is one button; reset the general button look. */
+.cover-option {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    padding: 6px;
+    border: 1px solid #ced4da;
+    background-color: #fff;
+    white-space: normal;
+    text-align: left;
+    font-size: 13px;
+}
+
+    .cover-option:hover {
+        border-color: #2f9fd6;
+        background-color: #e7f5fc;
+    }
+
+    .cover-option img {
+        width: 100%;
+        aspect-ratio: 2 / 3;
+        object-fit: contain;
+        background-color: #f1f3f5;
+    }
+
+/* Results the automatic search would have taken. */
+.cover-option-match {
+    border: 2px solid #43a047;
+}
+
+.cover-option-title {
+    font-weight: 600;
+}
+
+.cover-option-details {
+    color: #6c757d;
+}

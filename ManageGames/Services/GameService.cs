@@ -4,42 +4,49 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ManageGames.Services;
 
+/// <summary>A row of the game list; <see cref="CoverVersion"/> is null while the game has no cover.</summary>
+public sealed record GameListItem(int Id, string Name, string? ConsoleName, int Copies, Guid? CoverVersion);
+
 /// <summary>
 /// Games belong to exactly one user. Every read and write here is scoped by the owner's id,
 /// so a user can never see or change another user's collection, even with a crafted game id.
 /// </summary>
 public class GameService(AppDbContext db)
 {
-    public async Task<IReadOnlyList<Game>> GetGamesAsync(Guid userId, bool onWishList, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<GameListItem>> GetGamesAsync(Guid userId, bool onWishList, CancellationToken cancellationToken = default)
     {
         return await db.Games
             .Where(g => g.UserId == userId && g.IsOnWishList == onWishList)
-            .Include(g => g.Console)
             .OrderBy(g => g.Name)
-            .AsNoTracking()
+            // Only the cover's version, never its image data.
+            .Select(g => new GameListItem(g.Id, g.Name, g.Console != null ? g.Console.Name : null, g.Copies, g.Cover != null ? (Guid?)g.Cover.Version : null))
             .ToListAsync(cancellationToken);
     }
 
     public Task<Game?> GetGameAsync(int id, Guid userId, CancellationToken cancellationToken = default)
     {
         return db.Games
+            .Include(g => g.Console)
             .AsNoTracking()
             .FirstOrDefaultAsync(g => g.Id == id && g.UserId == userId, cancellationToken);
     }
 
-    public async Task AddGameAsync(Guid userId, string name, int copies, int? consoleId, bool onWishList, CancellationToken cancellationToken = default)
+    /// <summary>Returns the new game's id.</summary>
+    public async Task<int> AddGameAsync(Guid userId, string name, int copies, int? consoleId, bool onWishList, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        db.Games.Add(new Game
+        var game = new Game
         {
             UserId = userId,
             Name = name.Trim(),
             Copies = Math.Max(1, copies),
             ConsoleId = await ExistingConsoleIdAsync(consoleId, cancellationToken),
             IsOnWishList = onWishList,
-        });
+        };
+        db.Games.Add(game);
         await db.SaveChangesAsync(cancellationToken);
+        return game.Id;
     }
 
     /// <summary>Returns false when the game doesn't exist or belongs to someone else.</summary>

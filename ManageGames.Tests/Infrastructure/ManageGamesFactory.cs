@@ -62,6 +62,10 @@ public class ManageGamesFactory : WebApplicationFactory<Program>, IAsyncLifetime
             ["Seed:AdminPassword"] = SeedAdminPassword ?? string.Empty,
             ["RateLimiting:LoginPermitLimit"] = LoginPermitLimit.ToString(CultureInfo.InvariantCulture),
             ["RateLimiting:PasswordChangePermitLimit"] = PasswordChangePermitLimit.ToString(CultureInfo.InvariantCulture),
+            // Never the developer's own cover API keys from the user secrets: the tests must not reach the internet.
+            ["Covers:Igdb:ClientId"] = string.Empty,
+            ["Covers:Igdb:ClientSecret"] = string.Empty,
+            ["Covers:SteamGridDb:ApiKey"] = string.Empty,
         }));
         if (UseEphemeralKeys)
         {

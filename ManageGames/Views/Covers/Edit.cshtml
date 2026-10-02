@@ -1,0 +1,66 @@
+@model CoverPickerViewModel
+@{
+    ViewData["Title"] = "Choose a cover";
+}
+
+<h2>Choose a cover for @Model.GameName</h2>
+<p class="form-hint">@(Model.ConsoleName == null ? "No console set." : $"Console: {Model.ConsoleName}. Covers for it are listed first.")</p>
+
+<div class="list-toolbar">
+    <form asp-action="Edit" asp-route-id="@Model.GameId" method="get" class="search-form" role="search">
+        <label for="cover-query" class="visually-hidden">Search for</label>
+        <input type="search" id="cover-query" name="query" value="@Model.Query" maxlength="@FieldLimits.NameMaxLength" required />
+        <button type="submit">Search</button>
+    </form>
+    <a class="button-link" asp-controller="Games" asp-action="Edit" asp-route-id="@Model.GameId">Back to the game</a>
+</div>
+
+@if (!Model.HasProviders)
+{
+    <p class="flash flash-error" role="alert">
+        No cover source is set up yet, so covers can only be uploaded. The administrator can add the API keys of
+        IGDB or SteamGridDB (see the README).
+    </p>
+}
+else
+{
+    @foreach (var provider in Model.FailedProviders)
+    {
+        <p class="flash flash-error" role="alert">@provider could not be reached; its covers are missing below.</p>
+    }
+
+    @if (Model.Results.Count == 0)
+    {
+        <p class="empty-hint">No covers found. Try the English title or fewer words.</p>
+    }
+    else
+    {
+        <p class="form-hint">Click a cover to use it.</p>
+        <ul class="cover-results">
+            @foreach (var result in Model.Results)
+            {
+                var candidate = result.Candidate;
+                var details = string.Join(" · ", new[]
+                {
+                    candidate.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    candidate.Platforms.Count == 0 ? null : string.Join(", ", candidate.Platforms),
+                }.Where(d => d != null));
+                <li>
+                    <form asp-action="Choose" asp-route-id="@Model.GameId" method="post">
+                        <input type="hidden" name="provider" value="@candidate.Provider" />
+                        <input type="hidden" name="imageUrl" value="@candidate.ImageUrl" />
+                        <button type="submit" class="cover-option @(result.IsConfident ? "cover-option-match" : null)" title="Use this cover">
+                            <img src="@Url.Action("Preview", new { url = candidate.PreviewUrl.ToString() })" alt="" loading="lazy" />
+                            <span class="cover-option-title">@candidate.Title</span>
+                            @if (details.Length > 0)
+                            {
+                                <span class="cover-option-details">@details</span>
+                            }
+                            <span class="cover-option-details">@candidate.Provider</span>
+                        </button>
+                    </form>
+                </li>
+            }
+        </ul>
+    }
+}

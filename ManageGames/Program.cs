@@ -5,6 +5,7 @@ using ManageGames.Auth;
 using ManageGames.Data;
 using ManageGames.Models;
 using ManageGames.Services;
+using ManageGames.Services.Covers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -69,6 +70,9 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<AuthCookieEvents>();
+
+// Cover images from IGDB and SteamGridDB, for the sources whose API keys are configured (see the README).
+builder.Services.AddCoverSearch(builder.Configuration);
 
 builder.Services.AddIdentity<AppUser, IdentityRole<Guid>>(options =>
     {
@@ -179,6 +183,15 @@ using (var scope = app.Services.CreateScope())
     if (args is ["reset-password", var username])
     {
         Environment.ExitCode = await users.ResetToOneTimePasswordAsync(username) == null ? 1 : 0;
+        return;
+    }
+
+    // `dotnet ManageGames.dll scrape-covers [username]`: searches covers for all games (of one user) that have
+    // none yet, e.g. the ones added before the cover search existed, and exits.
+    if (args is ["scrape-covers", .. var scrapeArgs] && scrapeArgs.Length <= 1)
+    {
+        var covers = scope.ServiceProvider.GetRequiredService<CoverService>();
+        Environment.ExitCode = await covers.FindMissingCoversAsync(scrapeArgs.FirstOrDefault(), TimeSpan.FromMilliseconds(300)) ? 0 : 1;
         return;
     }
 }

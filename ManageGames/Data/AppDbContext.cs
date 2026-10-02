@@ -22,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<GameConsole> Consoles => Set<GameConsole>();
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<GameCover> GameCovers => Set<GameCover>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
     // Shared by all instances of the app, so a cookie issued by one instance is accepted by the others.
@@ -60,6 +61,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(g => new { g.UserId, g.IsOnWishList });
         });
 
+        ConfigureCovers(builder);
+
         builder.Entity<UserSession>(e =>
         {
             e.HasOne<AppUser>()
@@ -78,6 +81,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             entity.Property(nameof(ITimestamped.CreatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(nameof(ITimestamped.UpdatedAt)).HasDefaultValueSql("CURRENT_TIMESTAMP");
         }
+    }
+
+    private static void ConfigureCovers(ModelBuilder builder)
+    {
+        builder.Entity<GameCover>(e =>
+        {
+            // At most one cover per game; it goes away with the game.
+            e.HasKey(c => c.GameId);
+            e.HasOne(c => c.Game)
+             .WithOne(g => g.Cover)
+             .HasForeignKey<GameCover>(c => c.GameId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.Property(c => c.ContentType).HasMaxLength(50);
+            e.Property(c => c.Source).HasMaxLength(50);
+        });
     }
 
     // Override the most-derived overloads: the parameterless SaveChanges()/SaveChangesAsync()

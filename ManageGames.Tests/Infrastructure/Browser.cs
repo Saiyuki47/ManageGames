@@ -55,6 +55,18 @@ public static partial class Browser
         return client.PostAsync(action, new FormUrlEncodedContent(content));
     }
 
+    /// <summary>Uploads a file like a browser's file form (multipart/form-data, field "file").</summary>
+    public static async Task<HttpResponseMessage> UploadFileAsync(this HttpClient client, string formPage, string action, byte[] data, string fileName)
+    {
+        var token = await client.GetFormTokenAsync(formPage);
+        using var content = new MultipartFormDataContent
+        {
+            { new StringContent(token), "__RequestVerificationToken" },
+            { new ByteArrayContent(data), "file", fileName },
+        };
+        return await client.PostAsync(action, content);
+    }
+
     public static Task<HttpResponseMessage> LoginAsync(this HttpClient client, string username, string password, string? returnUrl = null)
     {
         var fields = new Dictionary<string, string> { ["Username"] = username, ["Password"] = password };
