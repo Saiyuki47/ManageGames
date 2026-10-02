@@ -10,6 +10,9 @@ ASP.NET Core Identity.
 ## Features
 
 - **Your games**: add, edit and delete games, with their console and the number of copies you own.
+- **Cover pictures**: adding a game looks up its cover at [IGDB](https://www.igdb.com) and
+  [SteamGridDB](https://www.steamgriddb.com) and shows it in the lists. If the automatic pick is wrong
+  or missing, choose another one from all results of both sources, or upload your own picture.
 - **Wishlist**: the games you still want, kept apart from your collection.
 - **Search and sorting**: lists can be searched (ignoring case and spaces) and sort alphabetically,
   with umlauts next to their base letter.
@@ -64,6 +67,53 @@ dotnet run --project ManageGames -- reset-password <username>
 
 A published build runs the same command as `dotnet ManageGames.dll reset-password <username>`.
 
+### Cover pictures
+
+Covers come from two sources, tried in this order: **IGDB** (knows the platforms of each game, so it
+picks the cover for the game's console) and **SteamGridDB** (community-made covers, used when IGDB has
+none that fits). Both need a free API key; without any key, everything works except the search, and
+covers can still be uploaded. One source is enough.
+
+- **IGDB**: log in to the [Twitch developer console](https://dev.twitch.tv/console) (Twitch account
+  with two-factor authentication), register an application (OAuth redirect URL `http://localhost`,
+  client type *Confidential*), then create a client secret. IGDB is
+  free for non-commercial use under the
+  [Twitch Developer Services Agreement](https://www.twitch.tv/p/legal/developer-agreement/).
+- **SteamGridDB**: log in at [steamgriddb.com](https://www.steamgriddb.com) and create a key under
+  [Preferences → API](https://www.steamgriddb.com/profile/preferences/api).
+
+Keep the keys out of the repository. For development, store them as user secrets:
+
+```bash
+dotnet user-secrets set "Covers:Igdb:ClientId" "<client id>" --project ManageGames
+```
+
+```bash
+dotnet user-secrets set "Covers:Igdb:ClientSecret" "<client secret>" --project ManageGames
+```
+
+```bash
+dotnet user-secrets set "Covers:SteamGridDb:ApiKey" "<api key>" --project ManageGames
+```
+
+On a server, use the environment variables `Covers__Igdb__ClientId`, `Covers__Igdb__ClientSecret` and
+`Covers__SteamGridDb__ApiKey`.
+
+- **Adding a game** waits up to 15 seconds for its cover. It only takes a cover whose title clearly
+  matches and that isn't for another console; a wrong cover is worse than none.
+- **Editing a game** shows its cover. *Find a cover* lists the results of all sources, the ones for
+  the game's console first, and lets you change the search (e.g. to the English title); clicking one
+  stores it. You can also upload a JPEG, PNG, WebP or GIF of up to 5 MB, or remove the cover.
+  Changing a game's title or console searches again if it has no cover yet.
+- **Games added earlier** get their covers with one command; it searches every game without a cover,
+  of all users or of one:
+
+```bash
+dotnet run --project ManageGames -- scrape-covers [username]
+```
+
+A published build runs it as `dotnet ManageGames.dll scrape-covers [username]`.
+
 ## Configuration
 
 Settings come from `appsettings.json`, `appsettings.Development.json`, user secrets or environment
@@ -79,6 +129,10 @@ variables (write `__` instead of `:`, e.g. `ConnectionStrings__ManageGames`).
 | `Authentication:AbsoluteSessionLifetime` | Maximum length of a session, however active | `12:00:00` |
 | `DataProtection:CertificatePath` | PFX certificate that encrypts the cookie keys stored in the database | not encrypted (the app logs a warning) |
 | `DataProtection:CertificatePassword` | Password of that PFX file | none |
+| `Covers:Igdb:ClientId`, `Covers:Igdb:ClientSecret` | IGDB access (a Twitch application), see [Cover pictures](#cover-pictures) | none: IGDB isn't used |
+| `Covers:SteamGridDb:ApiKey` | SteamGridDB API key | none: SteamGridDB isn't used |
+| `Covers:Providers` | The cover sources in the order the automatic search tries them | `IGDB,SteamGridDB` |
+| `Covers:AutoSearchTimeout` | How long adding a game waits for its cover | `00:00:15` |
 | `AllowedHosts` | Host names the app answers to; set it to your domain when others can reach it | `*` |
 
 The development connection string, including the password of the local container, is in
@@ -136,6 +190,11 @@ while the database is reachable, for load balancers and container platforms.
 - **Web**: all forms are protected against CSRF; responses carry a strict Content Security Policy,
   `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy`, but no
   `Server` header; HSTS is sent outside of development.
+- **Covers**: images are only downloaded from the image servers of the configured sources (HTTPS, no
+  redirects followed), at most 5 MB, and stored only if their content really is a JPEG, PNG, WebP or
+  GIF, whatever the file name or the server claims; uploads are checked the same way. The browser
+  loads every picture from the app itself, including the previews of search results, so the Content
+  Security Policy stays strict and the sources never see who looks at them.
 - **Logging**: logins, lockouts, rate limit hits, password changes and resets and account changes are
   logged, never with a password (except the one-time passwords, which are only good for one login).
 
@@ -144,6 +203,7 @@ while the database is reachable, for load balancers and container platforms.
 | Tables | Contents |
 | --- | --- |
 | `Games` | The games of every user, with console, copies and the wishlist flag |
+| `GameCovers` | One cover image per game, with its source; deleted together with the game |
 | `Consoles`, `Companies` | The shared catalog; a console refers to its maker |
 | `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`, ... | Accounts and the Admin role (ASP.NET Core Identity) |
 | `UserSessions` | One row per signed-in browser |
@@ -203,9 +263,10 @@ dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing 
 
 | Path | Contents |
 | --- | --- |
-| `ManageGames/Program.cs` | Startup: services, security settings, migrations, the request pipeline, the `reset-password` command |
-| `ManageGames/Controllers` | Home (public pages), Account, Games, Consoles, Companies, Users |
-| `ManageGames/Services` | Games, consoles and companies on EF Core; accounts, sessions and user administration on Identity |
+| `ManageGames/Program.cs` | Startup: services, security settings, migrations, the request pipeline, the `reset-password` and `scrape-covers` commands |
+| `ManageGames/Controllers` | Home (public pages), Account, Games, Covers, Consoles, Companies, Users |
+| `ManageGames/Services` | Games, covers, consoles and companies on EF Core; accounts, sessions and user administration on Identity |
+| `ManageGames/Services/Covers` | The cover search: the IGDB and SteamGridDB sources, title and console matching, image downloads |
 | `ManageGames/Auth` | Password rules, session checks for the auth cookie, security headers, security logging, forced password change |
 | `ManageGames/Data`, `ManageGames/Models` | The EF Core database context and the entities |
 | `ManageGames/Migrations` | The database schema and the console catalog |
@@ -218,7 +279,8 @@ dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing 
 ## Ideas
 
 - Mobile-friendly layout and a dark mode
-- Notes, cover pictures and photos of your own copies (to document their condition) per game
+- More cover sources (ScreenScraper, TheGamesDB, RAWG)
+- Notes and photos of your own copies (to document their condition) per game
 - Per-game flags such as "has its case" or "backup made"
 - Wishlist priorities
 - Tracking owned consoles and handhelds like games

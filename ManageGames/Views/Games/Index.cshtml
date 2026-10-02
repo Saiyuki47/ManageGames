@@ -19,6 +19,7 @@ else
     <table class="data-table">
         <thead>
             <tr>
+                <th><span class="visually-hidden">Cover</span></th>
                 <th>Title</th>
                 <th>Console</th>
                 <th class="numeric">Copies</th>
@@ -29,8 +30,18 @@ else
             @foreach (var game in Model.Games)
             {
                 <tr>
+                    <td class="cover-cell">
+                        @if (game.CoverVersion is { } coverVersion)
+                        {
+                            <img class="cover-thumb" src="@Url.Action("Image", "Covers", new { id = game.Id, v = coverVersion.ToString("N") })" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="cover-thumb cover-placeholder" aria-hidden="true"></span>
+                        }
+                    </td>
                     <td>@game.Name</td>
-                    <td>@(game.Console?.Name ?? "-")</td>
+                    <td>@(game.ConsoleName ?? "-")</td>
                     <td class="numeric">@game.Copies</td>
                     <td>
                         <div class="row-actions">

@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Development secrets such as the cover sources' API keys (`dotnet user-secrets`), kept outside the repository. -->
+    <UserSecretsId>a087469e-6e8c-4189-9b75-5e7daef0c17e</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
