@@ -10,6 +10,9 @@ namespace ManageGames.Services;
 /// <summary>What the edit page shows about a game's cover.</summary>
 public sealed record CoverInfo(Guid Version, string Source);
 
+/// <summary>A cover's thumbnail; <see cref="Data"/> is empty when the image couldn't be scaled down.</summary>
+public sealed record CoverThumbnailData(Guid Version, byte[] Data);
+
 public enum CoverChoiceResult
 {
     Saved,
@@ -37,6 +40,15 @@ public class CoverService(
             .FirstOrDefaultAsync(c => c.GameId == gameId && c.Game!.UserId == userId, cancellationToken);
     }
 
+    /// <summary>The small version for the lists; null without a cover, empty when the image couldn't be scaled down.</summary>
+    public Task<CoverThumbnailData?> GetThumbnailAsync(int gameId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        return db.GameCovers
+            .Where(c => c.GameId == gameId && c.Game!.UserId == userId)
+            .Select(c => new CoverThumbnailData(c.Version, c.Thumbnail ?? Array.Empty<byte>()))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public Task<CoverInfo?> GetCoverInfoAsync(int gameId, Guid userId, CancellationToken cancellationToken = default)
     {
         return db.GameCovers
@@ -45,24 +57,64 @@ public class CoverService(
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    /// <summary>Stores or replaces the cover. Returns false when the game doesn't exist or belongs to someone else.</summary>
-    public async Task<bool> SetCoverAsync(int gameId, Guid userId, CoverImage image, string source, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Stores or replaces the cover, with its thumbnail. <paramref name="isAutomatic"/> marks covers the automatic
+    /// search picked, which <c>scrape-covers --refresh</c> may replace. Returns false when the game doesn't exist
+    /// or belongs to someone else.
+    /// </summary>
+    public async Task<bool> SetCoverAsync(int gameId, Guid userId, CoverImage image, string source, bool isAutomatic, CancellationToken cancellationToken = default)
     {
+        var thumbnail = CoverThumbnail.Create(image.Data) ?? [];
         // One statement that inserts or replaces, so two quick clicks on two covers can't collide; the
         // SELECT only yields a row for the owner's own game.
         var rows = await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "GameCovers" ("GameId", "Version", "ContentType", "Data", "Source", "CreatedAt", "UpdatedAt")
-            SELECT "Id", {Guid.NewGuid()}, {image.ContentType}, {image.Data}, {source}, now(), now()
+            INSERT INTO "GameCovers" ("GameId", "Version", "ContentType", "Data", "Thumbnail", "Source", "IsAutomatic", "CreatedAt", "UpdatedAt")
+            SELECT "Id", {Guid.NewGuid()}, {image.ContentType}, {image.Data}, {thumbnail}, {source}, {isAutomatic}, now(), now()
             FROM "Games"
             WHERE "Id" = {gameId} AND "UserId" = {userId}
             ON CONFLICT ("GameId") DO UPDATE SET
                 "Version" = excluded."Version",
                 "ContentType" = excluded."ContentType",
                 "Data" = excluded."Data",
+                "Thumbnail" = excluded."Thumbnail",
                 "Source" = excluded."Source",
+                "IsAutomatic" = excluded."IsAutomatic",
                 "UpdatedAt" = excluded."UpdatedAt"
             """, cancellationToken);
         return rows > 0;
+    }
+
+    /// <summary>
+    /// Makes the thumbnails that are still missing, e.g. of covers stored before thumbnails existed. Runs at
+    /// startup; returns how many it made.
+    /// </summary>
+    public async Task<int> CreateMissingThumbnailsAsync(CancellationToken cancellationToken = default)
+    {
+        var made = 0;
+        while (true)
+        {
+            // In small batches, so only a few full images are in memory at once.
+            var batch = await db.GameCovers
+                .Where(c => c.Thumbnail == null)
+                .OrderBy(c => c.GameId)
+                .Select(c => new { c.GameId, c.Version, c.Data })
+                .Take(20)
+                .ToListAsync(cancellationToken);
+            if (batch.Count == 0)
+            {
+                return made;
+            }
+
+            foreach (var cover in batch)
+            {
+                var thumbnail = CoverThumbnail.Create(cover.Data) ?? [];
+                // Only if the cover wasn't replaced meanwhile (a replaced one has its thumbnail already). An image
+                // that can't be scaled down gets an empty one, so it isn't tried again at every start.
+                made += await db.GameCovers
+                    .Where(c => c.GameId == cover.GameId && c.Version == cover.Version && c.Thumbnail == null)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.Thumbnail, thumbnail), cancellationToken);
+            }
+        }
     }
 
     /// <summary>Returns false when the game doesn't exist or belongs to someone else.</summary>
@@ -95,7 +147,7 @@ public class CoverService(
         {
             return CoverChoiceResult.DownloadFailed;
         }
-        return await SetCoverAsync(gameId, userId, image, source.Name, cancellationToken) ? CoverChoiceResult.Saved : CoverChoiceResult.GameNotFound;
+        return await SetCoverAsync(gameId, userId, image, source.Name, isAutomatic: false, cancellationToken) ? CoverChoiceResult.Saved : CoverChoiceResult.GameNotFound;
     }
 
     /// <summary>
@@ -113,14 +165,16 @@ public class CoverService(
             .Where(g => g.Id == gameId && g.UserId == userId && g.Cover == null)
             .Select(g => new { g.Name, Console = g.Console != null ? g.Console.Name : null })
             .FirstOrDefaultAsync(cancellationToken);
-        return game != null && await SearchAndStoreAsync(gameId, userId, game.Name, game.Console, cancellationToken);
+        return game != null && await SearchAndStoreAsync(gameId, userId, game.Name, game.Console, preferredRegionOnly: false, cancellationToken);
     }
 
     /// <summary>
     /// For the <c>scrape-covers</c> command: the automatic search for every game without a cover, of one user or
-    /// of all. Returns false when no source is configured or the user doesn't exist.
+    /// of all. With <paramref name="refresh"/>, also for the covers the automatic search picked earlier, which are
+    /// replaced if a source has one of a preferred region (<see cref="CoverOptions.Regions"/>); covers the user
+    /// chose or uploaded are never touched. Returns false when no source is configured or the user doesn't exist.
     /// </summary>
-    public async Task<bool> FindMissingCoversAsync(string? username, TimeSpan pauseBetweenGames, CancellationToken cancellationToken = default)
+    public async Task<bool> FindMissingCoversAsync(string? username, bool refresh, TimeSpan pauseBetweenGames, CancellationToken cancellationToken = default)
     {
         if (scraper.GetActiveProviders().Count == 0)
         {
@@ -141,14 +195,15 @@ public class CoverService(
         }
 
         var games = await db.Games
-            .Where(g => g.Cover == null && (userId == null || g.UserId == userId))
+            .Where(g => (g.Cover == null || (refresh && g.Cover.IsAutomatic)) && (userId == null || g.UserId == userId))
             .OrderBy(g => g.Id)
-            .Select(g => new { g.Id, g.UserId, g.Name, Console = g.Console != null ? g.Console.Name : null })
+            .Select(g => new { g.Id, g.UserId, g.Name, Console = g.Console != null ? g.Console.Name : null, HasCover = g.Cover != null })
             .ToListAsync(cancellationToken);
         var found = 0;
         foreach (var game in games)
         {
-            if (await SearchAndStoreAsync(game.Id, game.UserId, game.Name, game.Console, cancellationToken))
+            // An automatic cover is only worth replacing with one of a preferred region.
+            if (await SearchAndStoreAsync(game.Id, game.UserId, game.Name, game.Console, preferredRegionOnly: game.HasCover, cancellationToken))
             {
                 found++;
             }
@@ -159,14 +214,14 @@ public class CoverService(
         return true;
     }
 
-    private async Task<bool> SearchAndStoreAsync(int gameId, Guid userId, string title, string? console, CancellationToken cancellationToken)
+    private async Task<bool> SearchAndStoreAsync(int gameId, Guid userId, string title, string? console, bool preferredRegionOnly, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(options.CurrentValue.AutoSearchTimeout);
         FoundCover? found;
         try
         {
-            found = await scraper.FindCoverAsync(title, console, timeout.Token);
+            found = await scraper.FindCoverAsync(title, console, preferredRegionOnly, timeout.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -179,8 +234,8 @@ public class CoverService(
             logger.NoCoverFound(title);
             return false;
         }
-        logger.CoverFound(title, found.Provider, found.MatchedTitle);
-        return await SetCoverAsync(gameId, userId, found.Image, found.Provider, cancellationToken);
+        logger.CoverFound(title, found.Provider, found.MatchedTitle, found.Region ?? "-");
+        return await SetCoverAsync(gameId, userId, found.Image, found.Provider, isAutomatic: true, cancellationToken);
     }
 
     private Task<bool> OwnsGameAsync(int gameId, Guid userId, CancellationToken cancellationToken)

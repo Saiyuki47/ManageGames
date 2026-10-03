@@ -29,11 +29,26 @@ public class CoversController(GameService games, CoverService covers, CoverScrap
             return NotFound();
         }
 
-        var version = cover.Version.ToString("N");
-        Response.Headers.CacheControl = string.Equals(v, version, StringComparison.Ordinal)
-            ? "private, max-age=31536000, immutable"
-            : "private, no-cache";
-        return File(cover.Data, cover.ContentType, lastModified: null, new EntityTagHeaderValue($"\"{version}\""));
+        return CachedFile(cover.Data, cover.ContentType, cover.Version, v);
+    }
+
+    /// <summary>
+    /// The small version for the game lists; the full image when there is none, e.g. for an image that couldn't
+    /// be scaled down.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Thumbnail(int id, string? v, CancellationToken cancellationToken)
+    {
+        var thumbnail = await covers.GetThumbnailAsync(id, User.GetUserId(), cancellationToken);
+        if (thumbnail == null)
+        {
+            return NotFound();
+        }
+        if (thumbnail.Data.Length == 0)
+        {
+            return await Image(id, v, cancellationToken);
+        }
+        return CachedFile(thumbnail.Data, CoverThumbnail.ContentType, thumbnail.Version, v);
     }
 
     /// <summary>Searches all cover sources and shows the results to pick from.</summary>
@@ -95,7 +110,7 @@ public class CoversController(GameService games, CoverService covers, CoverScrap
             return RedirectToGame(id);
         }
 
-        if (!await covers.SetCoverAsync(id, User.GetUserId(), image, GameCover.UploadSource, cancellationToken))
+        if (!await covers.SetCoverAsync(id, User.GetUserId(), image, GameCover.UploadSource, isAutomatic: false, cancellationToken))
         {
             return NotFound();
         }
@@ -133,6 +148,17 @@ public class CoversController(GameService games, CoverService covers, CoverScrap
         }
         Response.Headers.CacheControl = "private, max-age=86400";
         return File(image.Data, image.ContentType);
+    }
+
+    // The address contains the cover's version (v), so a matching request may be cached for good; others are
+    // revalidated with the ETag.
+    private FileContentResult CachedFile(byte[] data, string contentType, Guid coverVersion, string? requestedVersion)
+    {
+        var version = coverVersion.ToString("N");
+        Response.Headers.CacheControl = string.Equals(requestedVersion, version, StringComparison.Ordinal)
+            ? "private, max-age=31536000, immutable"
+            : "private, no-cache";
+        return File(data, contentType, lastModified: null, new EntityTagHeaderValue($"\"{version}\""));
     }
 
     private RedirectToActionResult RedirectToGame(int id)

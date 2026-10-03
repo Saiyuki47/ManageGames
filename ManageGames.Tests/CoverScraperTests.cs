@@ -214,6 +214,90 @@ public class CoverScraperTests
     }
 
     [Fact]
+    public async Task FindCoverAsync_PrefersTheConfiguredRegions()
+    {
+        _first.Returns("Celeste",
+            _first.Candidate("Celeste", "main.png"),
+            _first.RegionalCandidate("Celeste", "us", "us.png"),
+            _first.RegionalCandidate("Celeste", "eu", "eu.png"),
+            _first.RegionalCandidate("Celeste", "de", "de.png"));
+
+        var found = await CreateScraper().FindCoverAsync("Celeste", null, TestContext.Current.CancellationToken);
+
+        Assert.Equal("de", found?.Region);
+        Assert.Equal("/de.png", Assert.Single(_web.Requests).Url.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task FindCoverAsync_WithPreferredRegionOnly_SkipsCoversOfOtherRegions()
+    {
+        _first.Returns("Celeste", _first.Candidate("Celeste", "main.png"), _first.RegionalCandidate("Celeste", "us", "us.png"));
+        _second.Returns("Celeste", _second.RegionalCandidate("Celeste", "eu", "eu.png"));
+
+        var any = await CreateScraper().FindCoverAsync("Celeste", null, TestContext.Current.CancellationToken);
+        var preferred = await CreateScraper().FindCoverAsync("Celeste", null, preferredRegionOnly: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal(("First", (string?)null), (any?.Provider, any?.Region));
+        Assert.Equal(("Second", "eu"), (preferred?.Provider, preferred?.Region));
+    }
+
+    [Fact]
+    public async Task SearchAsync_ListsThePreferredRegionsFirst()
+    {
+        _first.Returns("Celeste",
+            _first.RegionalCandidate("Celeste", "us", "us.png"),
+            _first.Candidate("Celeste", "main.png"),
+            _first.RegionalCandidate("Celeste", "eu", "eu.png"));
+
+        var result = await CreateScraper().SearchAsync("Celeste", null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["eu.png", "us.png", "main.png"], result.Covers.Select(c => c.Candidate.ImageUrl.Segments[^1]));
+    }
+
+    [Fact]
+    public void IsPreferredRegion_FollowsTheSetting()
+    {
+        var scraper = CreateScraper();
+
+        Assert.True(scraper.IsPreferredRegion("de"));
+        Assert.True(scraper.IsPreferredRegion("eu"));
+        Assert.False(scraper.IsPreferredRegion("us"));
+        Assert.False(scraper.IsPreferredRegion(null));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_AddsTheSourcesCredentials_OnlyToTheRequest()
+    {
+        _first.DownloadKey = "secret";
+
+        var image = await CreateScraper().DownloadAsync(new Uri($"https://{_first.ImageHost}/a.png"), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(image);
+        Assert.Equal("?key=secret", Assert.Single(_web.Requests).Url.Query);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_KeepsToTheSourcesParallelLimit()
+    {
+        _web.Delay = TimeSpan.FromMilliseconds(100);
+        _first.MaxParallelDownloads = 1;
+        _second.MaxParallelDownloads = 4;
+        var scraper = CreateScraper();
+
+        Task DownloadThreeAsync(FakeCoverProvider provider)
+        {
+            return Task.WhenAll(Enumerable.Range(0, 3).Select(i => Task.Run(() =>
+                scraper.DownloadAsync(new Uri($"https://{provider.ImageHost}/{i}.png"), TestContext.Current.CancellationToken))));
+        }
+
+        await DownloadThreeAsync(_first);
+        Assert.Equal(1, _web.MostConcurrentRequests);
+        _web.ResetConcurrency();
+        await DownloadThreeAsync(_second);
+        Assert.True(_web.MostConcurrentRequests > 1, $"{_web.MostConcurrentRequests} at once");
+    }
+
+    [Fact]
     public void IsKnownImage_And_FindProvider_OnlyKnowActiveSources()
     {
         _second.IsConfigured = false;
