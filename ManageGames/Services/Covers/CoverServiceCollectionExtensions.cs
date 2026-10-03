@@ -21,8 +21,9 @@ public static class CoverServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
         services.TryAddSingleton(TimeProvider.System);
-        // Singletons: IGDB keeps its access token between requests.
+        // Singletons: IGDB keeps its access token and ScreenScraper its list of systems between requests.
         services.AddSingleton<ICoverProvider, IgdbCoverProvider>();
+        services.AddSingleton<ICoverProvider, ScreenScraperCoverProvider>();
         services.AddSingleton<ICoverProvider, SteamGridDbCoverProvider>();
         services.AddSingleton<CoverScraper>();
         services.AddScoped<CoverService>();

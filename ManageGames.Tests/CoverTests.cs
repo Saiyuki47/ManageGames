@@ -2,6 +2,7 @@ using System.Net;
 using ManageGames.Models;
 using ManageGames.Services;
 using ManageGames.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace ManageGames.Tests;
 
@@ -22,7 +23,7 @@ public class CoverTests(CoverFactory factory) : IClassFixture<CoverFactory>
         var cover = Cover(gameId);
         Assert.NotNull(cover);
         Assert.Equal((FakeCoverProvider.DefaultName, "image/png"), (cover.Source, cover.ContentType));
-        Assert.Contains($"/Covers/Image/{gameId}?v={cover.Version:N}", await browser.GetPageAsync("/Games"));
+        Assert.Contains($"/Covers/Thumbnail/{gameId}?v={cover.Version:N}", await browser.GetPageAsync("/Games"));
 
         var image = await browser.GetAsync($"/Covers/Image/{gameId}?v={cover.Version:N}");
         Assert.Equal(HttpStatusCode.OK, image.StatusCode);
@@ -389,7 +390,7 @@ public class CoverTests(CoverFactory factory) : IClassFixture<CoverFactory>
         Provider.Returns(first, Provider.Candidate(first));
         Provider.Returns(othersGame, Provider.Candidate(othersGame));
 
-        var succeeded = await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(user.Username.ToUpperInvariant(), TimeSpan.Zero));
+        var succeeded = await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(user.Username.ToUpperInvariant(), refresh: false, TimeSpan.Zero));
 
         Assert.True(succeeded);
         Assert.NotNull(Cover(factory.GameId(first)));
@@ -398,14 +399,157 @@ public class CoverTests(CoverFactory factory) : IClassFixture<CoverFactory>
         Assert.Equal(coverVersion, Cover(withCover)?.Version);
 
         // Without a username: everybody's games.
-        Assert.True(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(null, TimeSpan.Zero)));
+        Assert.True(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(null, refresh: false, TimeSpan.Zero)));
         Assert.NotNull(Cover(factory.GameId(othersGame)));
     }
 
     [Fact]
     public async Task FindMissingCovers_Fails_ForUnknownUsers()
     {
-        Assert.False(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync("nobody-" + Guid.NewGuid(), TimeSpan.Zero)));
+        Assert.False(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync("nobody-" + Guid.NewGuid(), refresh: false, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task Thumbnail_IsASmallWebpVersionOfTheCover()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var gameId = await AddGameWithoutCoverAsync(browser);
+        var original = TestImages.Create(600, 900);
+        await browser.UploadFileAsync($"/Games/Edit/{gameId}", $"/Covers/Upload/{gameId}", original, "cover.png");
+        var cover = Cover(gameId)!;
+
+        var response = await browser.GetAsync($"/Covers/Thumbnail/{gameId}?v={cover.Version:N}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
+        var thumbnail = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(cover.Thumbnail, thumbnail);
+        Assert.True(thumbnail.Length * 5 < original.Length);
+        Assert.Equal(TimeSpan.FromDays(365), response.Headers.CacheControl?.MaxAge);
+    }
+
+    [Fact]
+    public async Task Thumbnail_FallsBackToTheFullImage_WhenItCannotBeScaledDown()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var gameId = await AddGameWithoutCoverAsync(browser);
+        await browser.UploadFileAsync($"/Games/Edit/{gameId}", $"/Covers/Upload/{gameId}", TestImages.Jpeg, "broken.jpg");
+
+        var response = await browser.GetAsync($"/Covers/Thumbnail/{gameId}");
+
+        Assert.Equal(Array.Empty<byte>(), Cover(gameId)!.Thumbnail);
+        Assert.Equal("image/jpeg", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(TestImages.Jpeg, await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Thumbnail_IsInvisibleForOtherUsers()
+    {
+        var owner = await factory.SignInAsync(await factory.CreateUserAsync());
+        var intruder = await factory.SignInAsync(await factory.CreateUserAsync());
+        var gameId = await AddGameWithCoverAsync(owner);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await intruder.GetAsync($"/Covers/Thumbnail/{gameId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/Covers/Thumbnail/{gameId}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task MissingThumbnails_AreMadeLater()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var gameId = await AddGameWithoutCoverAsync(browser);
+        await browser.UploadFileAsync($"/Games/Edit/{gameId}", $"/Covers/Upload/{gameId}", TestImages.Create(300, 450), "cover.png");
+        var version = Cover(gameId)!.Version;
+        factory.Query(db => db.GameCovers.Where(c => c.GameId == gameId).ExecuteUpdate(s => s.SetProperty(c => c.Thumbnail, (byte[]?)null)));
+
+        var made = await factory.WithServiceAsync<CoverService, int>(s => s.CreateMissingThumbnailsAsync());
+
+        Assert.True(made >= 1);
+        var cover = Cover(gameId)!;
+        Assert.NotEmpty(cover.Thumbnail!);
+        Assert.Equal(version, cover.Version);
+        Assert.Equal(0, await factory.WithServiceAsync<CoverService, int>(s => s.CreateMissingThumbnailsAsync()));
+    }
+
+    [Fact]
+    public async Task OnlyCoversOfTheAutomaticSearch_AreMarkedAutomatic()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var automatic = await AddGameWithCoverAsync(browser);
+        var uploaded = await AddGameWithCoverAsync(browser);
+        var chosen = await AddGameWithCoverAsync(browser);
+
+        await browser.UploadFileAsync($"/Games/Edit/{uploaded}", $"/Covers/Upload/{uploaded}", TestImages.Jpeg, "mine.jpg");
+        await browser.SubmitFormAsync("/Games", $"/Covers/Choose/{chosen}", new Dictionary<string, string>
+        {
+            ["provider"] = Provider.Name,
+            ["imageUrl"] = $"https://{Provider.ImageHost}/picked.png",
+        });
+
+        Assert.True(Cover(automatic)!.IsAutomatic);
+        Assert.False(Cover(uploaded)!.IsAutomatic);
+        Assert.False(Cover(chosen)!.IsAutomatic);
+    }
+
+    [Fact]
+    public async Task Refresh_ReplacesAutomaticCovers_WithOnesOfAPreferredRegion()
+    {
+        var user = await factory.CreateUserAsync();
+        var browser = await factory.SignInAsync(user);
+        var american = await AddGameWithCoverAsync(browser);
+        var uploaded = await AddGameWithCoverAsync(browser);
+        var noRegional = await AddGameWithCoverAsync(browser);
+        await browser.UploadFileAsync($"/Games/Edit/{uploaded}", $"/Covers/Upload/{uploaded}", TestImages.Jpeg, "mine.jpg");
+        var before = new[] { american, uploaded, noRegional }.ToDictionary(id => id, id => Cover(id)!.Version);
+        var names = factory.Query(db => db.Games.Where(g => before.Keys.Contains(g.Id)).ToDictionary(g => g.Id, g => g.Name));
+        Provider.Returns(names[american], Provider.RegionalCandidate(names[american], "eu", "european.png"));
+        Provider.Returns(names[uploaded], Provider.RegionalCandidate(names[uploaded], "de", "german.png"));
+        Provider.Returns(names[noRegional], Provider.RegionalCandidate(names[noRegional], "us", "american.png"));
+
+        Assert.True(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(user.Username, refresh: false, TimeSpan.Zero)));
+        Assert.Equal(before[american], Cover(american)!.Version);
+
+        Assert.True(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(user.Username, refresh: true, TimeSpan.Zero)));
+        Assert.NotEqual(before[american], Cover(american)!.Version);
+        Assert.True(Cover(american)!.IsAutomatic);
+        Assert.Equal(before[uploaded], Cover(uploaded)!.Version);
+        Assert.Equal(before[noRegional], Cover(noRegional)!.Version);
+        Assert.DoesNotContain(factory.Web.Requests, r => r.Url.AbsolutePath == "/german.png");
+    }
+
+    [Fact]
+    public async Task CoverPicker_ShowsTheRegion_AndKeepsSourceCredentialsOutOfThePage()
+    {
+        var browser = await factory.SignInAsync(await factory.CreateUserAsync());
+        var gameId = await AddGameWithoutCoverAsync(browser);
+        var search = ManageGamesFactory.Unique("Regional");
+        Provider.Returns(search, Provider.RegionalCandidate(search, "eu", "regional.png"));
+        Provider.DownloadKey = "source-secret";
+        try
+        {
+            var page = await browser.GetPageAsync($"/Covers/Edit/{gameId}?query={search}");
+            var choose = await browser.SubmitFormAsync($"/Covers/Edit/{gameId}?query={search}", $"/Covers/Choose/{gameId}", new Dictionary<string, string>
+            {
+                ["provider"] = Provider.Name,
+                ["imageUrl"] = $"https://{Provider.ImageHost}/regional.png",
+            });
+
+            Assert.Contains($"{Provider.Name} &#xB7; EU", page);
+            Assert.DoesNotContain("source-secret", page);
+            Browser.AssertRedirect(choose, $"/Games/Edit/{gameId}");
+            Assert.Contains(factory.Web.Requests, r => r.Url.PathAndQuery == "/regional.png?key=source-secret");
+        }
+        finally
+        {
+            Provider.DownloadKey = null;
+        }
+    }
+
+    private async Task<int> AddGameWithoutCoverAsync(HttpClient browser)
+    {
+        var name = ManageGamesFactory.Unique("Bare");
+        await browser.AddGameAsync(name);
+        return factory.GameId(name);
     }
 
     private async Task<int> AddGameWithCoverAsync(HttpClient browser)
@@ -458,6 +602,6 @@ public class CoverWithoutSourcesTests(ManageGamesFactory factory) : IClassFixtur
     [Fact]
     public async Task FindMissingCovers_Fails_WithoutSources()
     {
-        Assert.False(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(null, TimeSpan.Zero)));
+        Assert.False(await factory.WithServiceAsync<CoverService, bool>(s => s.FindMissingCoversAsync(null, refresh: false, TimeSpan.Zero)));
     }
 }

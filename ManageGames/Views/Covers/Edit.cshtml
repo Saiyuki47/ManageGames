@@ -45,6 +45,7 @@ else
                     candidate.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     candidate.Platforms.Count == 0 ? null : string.Join(", ", candidate.Platforms),
                 }.Where(d => d != null));
+                var source = candidate.Region == null ? candidate.Provider : $"{candidate.Provider} · {candidate.Region.ToUpperInvariant()}";
                 <li>
                     <form asp-action="Choose" asp-route-id="@Model.GameId" method="post">
                         <input type="hidden" name="provider" value="@candidate.Provider" />
@@ -56,7 +57,7 @@ else
                             {
                                 <span class="cover-option-details">@details</span>
                             }
-                            <span class="cover-option-details">@candidate.Provider</span>
+                            <span class="cover-option-details">@source</span>
                         </button>
                     </form>
                 </li>

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -11,7 +12,8 @@ namespace ManageGames.Services.Covers;
 /// Similarity to the result's main title only. Breaks ties: for "Wii Fit", the game "Wii Fit" beats
 /// "Wii Fit Plus", which is also known as "Wii Fit +".
 /// </param>
-public sealed record RankedCover(CoverCandidate Candidate, double Score, bool? PlatformMatch, double MainTitleScore)
+/// <param name="RegionRank">0 for the most preferred box art region (<see cref="CoverOptions.Regions"/>), higher for others.</param>
+public sealed record RankedCover(CoverCandidate Candidate, double Score, bool? PlatformMatch, double MainTitleScore, int RegionRank)
 {
     /// <summary>Good enough to be taken without asking: a similar title and not for another console.</summary>
     public bool IsConfident => Score >= TitleMatcher.AcceptThreshold && PlatformMatch != false;
@@ -23,7 +25,7 @@ public sealed record RankedCover(CoverCandidate Candidate, double Score, bool? P
 public sealed record CoverSearchResult(IReadOnlyList<RankedCover> Covers, IReadOnlyList<string> FailedProviders);
 
 /// <summary>A cover the automatic search found and downloaded.</summary>
-public sealed record FoundCover(CoverImage Image, string Provider, string MatchedTitle);
+public sealed record FoundCover(CoverImage Image, string Provider, string MatchedTitle, string? Region);
 
 /// <summary>
 /// Searches the configured cover sources (<see cref="ICoverProvider"/>) and downloads their images. A source that
@@ -37,6 +39,8 @@ public sealed class CoverScraper(
 {
     // How many confident results the automatic search tries to download before it moves on to the next source.
     private const int DownloadAttempts = 3;
+
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _downloadSlots = new(StringComparer.Ordinal);
 
     /// <summary>The sources with API keys, in the configured order.</summary>
     public IReadOnlyList<ICoverProvider> GetActiveProviders()
@@ -62,18 +66,27 @@ public sealed class CoverScraper(
         return GetActiveProviders().Any(p => p.IsOwnImage(url));
     }
 
+    /// <summary>Whether the region is one of the preferred ones (<see cref="CoverOptions.Regions"/>).</summary>
+    public bool IsPreferredRegion(string? region)
+    {
+        var preferred = CoverRegions.Parse(options.CurrentValue.Regions);
+        return CoverRegions.Rank(preferred, region) < preferred.Count;
+    }
+
     /// <summary>Asks all active sources at once, for the user to pick a cover from all their results.</summary>
     public async Task<CoverSearchResult> SearchAsync(string title, string? console, CancellationToken cancellationToken)
     {
         var active = GetActiveProviders();
         var results = await Task.WhenAll(active.Select(p => SearchProviderAsync(p, title, cancellationToken)));
+        var regions = CoverRegions.Parse(options.CurrentValue.Regions);
 
         var covers = results
-            .SelectMany((candidates, source) => (candidates ?? []).Select((candidate, position) => (Cover: Rank(candidate, title, console), source, position)))
-            // Fitting titles first; the console moves results up or down a bit. Ties keep the configured
-            // source order and each source's own order.
+            .SelectMany((candidates, source) => (candidates ?? []).Select((candidate, position) => (Cover: Rank(candidate, title, console, regions), source, position)))
+            // Fitting titles first; the console moves results up or down a bit. Ties go to the preferred box art
+            // regions, then keep the configured source order and each source's own order.
             .OrderByDescending(r => r.Cover.Score + r.Cover.PlatformMatch switch { true => 0.2, false => -0.2, null => 0 })
             .ThenByDescending(r => r.Cover.MainTitleScore)
+            .ThenBy(r => r.Cover.RegionRank)
             .ThenBy(r => r.source)
             .ThenBy(r => r.position)
             .Select(r => r.Cover)
@@ -84,26 +97,38 @@ public sealed class CoverScraper(
 
     /// <summary>
     /// The automatic search: tries the sources one after the other and takes the first cover it is confident
-    /// about. Null when none fits well enough; a wrong cover would be worse than none.
+    /// about, of a preferred region if the source has one. Null when none fits well enough; a wrong cover would
+    /// be worse than none.
     /// </summary>
-    public async Task<FoundCover?> FindCoverAsync(string title, string? console, CancellationToken cancellationToken)
+    public Task<FoundCover?> FindCoverAsync(string title, string? console, CancellationToken cancellationToken)
     {
+        return FindCoverAsync(title, console, preferredRegionOnly: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// The automatic search; with <paramref name="preferredRegionOnly"/>, only covers of a preferred region
+    /// (<see cref="CoverOptions.Regions"/>) count.
+    /// </summary>
+    public async Task<FoundCover?> FindCoverAsync(string title, string? console, bool preferredRegionOnly, CancellationToken cancellationToken)
+    {
+        var regions = CoverRegions.Parse(options.CurrentValue.Regions);
         foreach (var provider in GetActiveProviders())
         {
             var candidates = await SearchProviderAsync(provider, title, cancellationToken);
             var confident = (candidates ?? [])
-                .Select((candidate, position) => (Cover: Rank(candidate, title, console), position))
-                .Where(r => r.Cover.IsConfident)
+                .Select((candidate, position) => (Cover: Rank(candidate, title, console, regions), position))
+                .Where(r => r.Cover.IsConfident && (!preferredRegionOnly || r.Cover.RegionRank < regions.Count))
                 .OrderByDescending(r => r.Cover.PlatformMatch == true)
                 .ThenByDescending(r => r.Cover.Score)
                 .ThenByDescending(r => r.Cover.MainTitleScore)
+                .ThenBy(r => r.Cover.RegionRank)
                 .ThenBy(r => r.position)
                 .Take(DownloadAttempts);
             foreach (var (cover, _) in confident)
             {
                 if (await DownloadAsync(cover.Candidate.ImageUrl, cancellationToken) is { } image)
                 {
-                    return new FoundCover(image, provider.Name, cover.Candidate.Title);
+                    return new FoundCover(image, provider.Name, cover.Candidate.Title, cover.Candidate.Region);
                 }
             }
         }
@@ -116,10 +141,29 @@ public sealed class CoverScraper(
     /// </summary>
     public async Task<CoverImage?> DownloadAsync(Uri url, CancellationToken cancellationToken)
     {
+        var provider = GetActiveProviders().FirstOrDefault(p => p.IsOwnImage(url));
+        var slots = provider == null ? null : _downloadSlots.GetOrAdd(provider.Name, _ => new SemaphoreSlim(Math.Max(1, provider.MaxParallelDownloads)));
+        if (slots != null)
+        {
+            await slots.WaitAsync(cancellationToken);
+        }
+        try
+        {
+            // Only the request carries a source's credentials; the logs show the address without them.
+            return await DownloadCoreAsync(url, provider?.GetDownloadUrl(url) ?? url, cancellationToken);
+        }
+        finally
+        {
+            slots?.Release();
+        }
+    }
+
+    private async Task<CoverImage?> DownloadCoreAsync(Uri url, Uri requestUrl, CancellationToken cancellationToken)
+    {
         try
         {
             using var client = httpClientFactory.CreateClient(CoverHttpClients.Images);
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await client.GetAsync(requestUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 logger.CoverDownloadFailed(url, $"HTTP {(int)response.StatusCode}");
@@ -166,13 +210,14 @@ public sealed class CoverScraper(
         }
     }
 
-    private static RankedCover Rank(CoverCandidate candidate, string title, string? console)
+    private static RankedCover Rank(CoverCandidate candidate, string title, string? console, IReadOnlyList<string> regions)
     {
         return new RankedCover(
             candidate,
             TitleMatcher.Similarity(title, candidate),
             TitleMatcher.PlatformMatches(console, candidate),
-            TitleMatcher.Similarity(title, candidate.Title));
+            TitleMatcher.Similarity(title, candidate.Title),
+            CoverRegions.Rank(regions, candidate.Region));
     }
 
     // Stops reading as soon as the limit is exceeded, whatever the server claimed beforehand.

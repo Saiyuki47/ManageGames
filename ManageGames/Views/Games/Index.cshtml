@@ -33,7 +33,7 @@ else
                     <td class="cover-cell">
                         @if (game.CoverVersion is { } coverVersion)
                         {
-                            <img class="cover-thumb" src="@Url.Action("Image", "Covers", new { id = game.Id, v = coverVersion.ToString("N") })" alt="" loading="lazy" />
+                            <img class="cover-thumb" src="@Url.Action("Thumbnail", "Covers", new { id = game.Id, v = coverVersion.ToString("N") })" alt="" loading="lazy" />
                         }
                         else
                         {

@@ -17,6 +17,18 @@ public interface ICoverProvider
 
     /// <summary>Covers of the games whose title resembles <paramref name="title"/>, best matches first.</summary>
     Task<IReadOnlyList<CoverCandidate>> SearchAsync(string title, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The address actually requested for one of this source's images. Sources that need credentials in the
+    /// address add them only here, so they never appear in pages, forms or logs.
+    /// </summary>
+    Uri GetDownloadUrl(Uri imageUrl)
+    {
+        return imageUrl;
+    }
+
+    /// <summary>How many of this source's images may be downloaded at once; some sources limit parallel requests.</summary>
+    int MaxParallelDownloads => 8;
 }
 
 /// <summary>A cover image a source offers for a game.</summary>
@@ -36,4 +48,8 @@ public sealed record CoverCandidate(
     IReadOnlyList<string> PlatformAliases,
     int? Year,
     Uri ImageUrl,
-    Uri PreviewUrl);
+    Uri PreviewUrl)
+{
+    /// <summary>The region of the box art in ScreenScraper's short names (de, eu, us, jp, ...); null when unknown.</summary>
+    public string? Region { get; init; }
+}

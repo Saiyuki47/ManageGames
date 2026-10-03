@@ -177,6 +177,11 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
     var users = scope.ServiceProvider.GetRequiredService<UserService>();
     await users.EnsureInitialAdminAsync(app.Configuration["Seed:AdminUsername"], app.Configuration["Seed:AdminPassword"]);
+    var covers = scope.ServiceProvider.GetRequiredService<CoverService>();
+    if (await covers.CreateMissingThumbnailsAsync() is > 0 and var thumbnails)
+    {
+        app.Logger.ThumbnailsCreated(thumbnails);
+    }
 
     // `dotnet ManageGames.dll reset-password <username>`: prints a one-time password for the account and
     // exits, for when nobody can log in anymore.
@@ -186,12 +191,15 @@ using (var scope = app.Services.CreateScope())
         return;
     }
 
-    // `dotnet ManageGames.dll scrape-covers [username]`: searches covers for all games (of one user) that have
-    // none yet, e.g. the ones added before the cover search existed, and exits.
-    if (args is ["scrape-covers", .. var scrapeArgs] && scrapeArgs.Length <= 1)
+    // `dotnet ManageGames.dll scrape-covers [--refresh] [username]`: searches covers for all games (of one user)
+    // that have none yet, e.g. the ones added before the cover search existed, and exits. --refresh also swaps
+    // automatically found covers for ones of the preferred regions (Covers:Regions) where a source has them.
+    if (args is ["scrape-covers", .. var scrapeArgs])
     {
-        var covers = scope.ServiceProvider.GetRequiredService<CoverService>();
-        Environment.ExitCode = await covers.FindMissingCoversAsync(scrapeArgs.FirstOrDefault(), TimeSpan.FromMilliseconds(300)) ? 0 : 1;
+        var refresh = scrapeArgs.Contains("--refresh", StringComparer.Ordinal);
+        var usernames = scrapeArgs.Where(a => a != "--refresh").ToList();
+        Environment.ExitCode = usernames.Count <= 1
+            && await covers.FindMissingCoversAsync(usernames.SingleOrDefault(), refresh, TimeSpan.FromMilliseconds(300)) ? 0 : 1;
         return;
     }
 }

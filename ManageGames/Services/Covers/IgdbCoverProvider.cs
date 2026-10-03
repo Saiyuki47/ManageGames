@@ -48,8 +48,8 @@ public sealed partial class IgdbCoverProvider(IHttpClientFactory httpClientFacto
             ?? throw new HttpRequestException("IGDB rejected a new access token.", null, HttpStatusCode.Unauthorized);
 
         return games
-            .Where(g => !string.IsNullOrWhiteSpace(g.Title) && g.Cover?.ImageId is { } id && ValidImageId().IsMatch(id))
-            .Select(ToCandidate)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Title) && IsValidImageId(g.Cover?.ImageId))
+            .SelectMany(ToCandidates)
             .ToList();
     }
 
@@ -60,7 +60,7 @@ public sealed partial class IgdbCoverProvider(IHttpClientFactory httpClientFacto
 
     /// <summary>
     /// The query in IGDB's Apicalypse language: games resembling the title that have a cover, with their
-    /// platforms and other titles (often including the German one) for matching.
+    /// platforms and other titles (often including the German one) for matching, and their regional covers.
     /// </summary>
     public static string BuildQuery(string title)
     {
@@ -68,7 +68,8 @@ public sealed partial class IgdbCoverProvider(IHttpClientFactory httpClientFacto
         var term = new string(title.Where(c => c is not ('"' or '\\') && !char.IsControl(c)).ToArray()).Trim();
         return $"search \"{term}\"; " +
             "fields name,first_release_date,cover.image_id,platforms.name,platforms.abbreviation,platforms.alternative_name," +
-            "alternative_names.name,game_localizations.name; " +
+            "alternative_names.name,game_localizations.name,game_localizations.region.identifier," +
+            "game_localizations.cover.image_id; " +
             $"where cover != null; limit {MaxResults};";
     }
 
@@ -127,18 +128,48 @@ public sealed partial class IgdbCoverProvider(IHttpClientFactory httpClientFacto
         }
     }
 
-    private CoverCandidate ToCandidate(IgdbGame game)
+    // The game's main cover (usually the North American one) and its regional covers (Europe, Japan, Korea).
+    private IEnumerable<CoverCandidate> ToCandidates(IgdbGame game)
     {
         var platforms = game.Platforms ?? [];
-        return new CoverCandidate(
+        var localizations = game.GameLocalizations ?? [];
+        var main = new CoverCandidate(
             Name,
             game.Title!,
-            (game.AlternativeNames ?? []).Concat(game.GameLocalizations ?? []).Select(n => n.Text).OfType<string>().ToList(),
+            (game.AlternativeNames ?? []).Select(n => n.Text).Concat(localizations.Select(l => l.Text)).OfType<string>().ToList(),
             platforms.Select(p => p.PlatformName).OfType<string>().ToList(),
             platforms.SelectMany(p => new[] { p.Abbreviation, p.AlternativeName }).OfType<string>().ToList(),
             game.FirstReleaseDate is { } released ? DateTimeOffset.FromUnixTimeSeconds(released).Year : null,
             ImageUrl("t_cover_big_2x", game.Cover!.ImageId!),
             ImageUrl("t_cover_big", game.Cover.ImageId!));
+
+        yield return main;
+        foreach (var localization in localizations.Where(l => IsValidImageId(l.Cover?.ImageId) && l.Cover!.ImageId != game.Cover.ImageId))
+        {
+            yield return main with
+            {
+                ImageUrl = ImageUrl("t_cover_big_2x", localization.Cover!.ImageId!),
+                PreviewUrl = ImageUrl("t_cover_big", localization.Cover.ImageId!),
+                Region = RegionName(localization.Region?.Identifier),
+            };
+        }
+    }
+
+    // IGDB's region identifiers ("EU", "ja-JP", "ko-KR") as ScreenScraper's short names, like CoverOptions.Regions.
+    private static string? RegionName(string? identifier)
+    {
+        return identifier switch
+        {
+            null or "" => null,
+            "ja-JP" => "jp",
+            "ko-KR" => "kr",
+            _ => identifier.ToLowerInvariant(),
+        };
+    }
+
+    private static bool IsValidImageId(string? imageId)
+    {
+        return imageId != null && ValidImageId().IsMatch(imageId);
     }
 
     // https://api-docs.igdb.com/#images: cover_big is 264 × 374, the _2x variant twice that.
@@ -162,11 +193,15 @@ public sealed partial class IgdbCoverProvider(IHttpClientFactory httpClientFacto
         IgdbImage? Cover,
         IReadOnlyList<IgdbPlatform>? Platforms,
         IReadOnlyList<IgdbName>? AlternativeNames,
-        IReadOnlyList<IgdbName>? GameLocalizations);
+        IReadOnlyList<IgdbLocalization>? GameLocalizations);
 
     private sealed record IgdbImage(string? ImageId);
 
     private sealed record IgdbPlatform([property: JsonPropertyName("name")] string? PlatformName, string? Abbreviation, string? AlternativeName);
 
     private sealed record IgdbName([property: JsonPropertyName("name")] string? Text);
+
+    private sealed record IgdbLocalization([property: JsonPropertyName("name")] string? Text, IgdbRegion? Region, IgdbImage? Cover);
+
+    private sealed record IgdbRegion(string? Identifier);
 }
