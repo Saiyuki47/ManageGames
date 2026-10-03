@@ -1,11 +1,12 @@
 # ManageGames
 
-A self-hosted web app to keep track of your video game collection: your games, the consoles they run
-on, the companies that make those consoles, and a wishlist. Several people can use one installation;
-everybody sees only their own collection.
+A self-hosted web app to keep track of your video game collection: your games with their cover
+pictures, the consoles they run on, the companies that make those consoles, and a wishlist. Several
+people can use one installation; everybody sees only their own collection.
 
 Built with ASP.NET Core MVC on .NET 10, Entity Framework Core and PostgreSQL, with accounts managed by
-ASP.NET Core Identity.
+ASP.NET Core Identity. Covers come from ScreenScraper, IGDB and SteamGridDB and are scaled down with
+SkiaSharp.
 
 ## Features
 
@@ -42,6 +43,9 @@ instead of `dotnet run`.
 
 `docker compose up -d` is only needed once: the database container then starts together with Docker.
 If Docker isn't running, the app stops right at startup with "Failed to connect to 127.0.0.1:5433".
+
+The app works without any further setup. To get cover pictures automatically, add the free credentials
+of at least one cover source, see [Cover pictures](#cover-pictures).
 
 ### What the first start does
 
@@ -126,8 +130,14 @@ dotnet user-secrets set "Covers:Igdb:ClientSecret" "<client secret>" --project M
 dotnet user-secrets set "Covers:SteamGridDb:ApiKey" "<api key>" --project ManageGames
 ```
 
-On a server, use environment variables instead, e.g. `Covers__ScreenScraper__DevId` or
-`Covers__Igdb__ClientSecret`.
+To check what is stored (this prints the values too, so not while sharing your screen):
+
+```bash
+dotnet user-secrets list --project ManageGames
+```
+
+Restart the app afterwards; the sources with credentials are used from then on. On a server, use
+environment variables instead, e.g. `Covers__ScreenScraper__DevId` or `Covers__Igdb__ClientSecret`.
 
 - **Adding a game** waits up to 15 seconds for its cover. It only takes a cover whose title clearly
   matches and that isn't for another console; a wrong cover is worse than none.
@@ -207,6 +217,10 @@ Run `publish/ManageGames.dll` with `dotnet`, configured through environment vari
 - **Host name**: set `AllowedHosts` to your domain.
 - **First admin**: read the one-time password from the log of the first start, or set
   `Seed__AdminPassword` beforehand.
+- **Cover sources** (optional): `Covers__ScreenScraper__DevId`, `Covers__ScreenScraper__DevPassword`,
+  `Covers__Igdb__ClientId`, `Covers__Igdb__ClientSecret`, `Covers__SteamGridDb__ApiKey`, and so on (see
+  [Configuration](#configuration)). The server needs outgoing HTTPS to the sources; the image library's
+  native parts for Linux come with the app, nothing else has to be installed.
 
 Several instances behind a load balancer work: sessions and cookie keys live in the database, and EF
 Core locks the database while one instance applies migrations at startup. The login rate limits count
@@ -269,10 +283,11 @@ dotnet tool restore                # once: the pinned dotnet-ef, libman and repo
 dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing the model
 ```
 
-- **Tests** are integration tests: they host the real app in memory and send requests like a browser,
-  against real PostgreSQL. Testcontainers starts a throw-away PostgreSQL container for the run, with a
-  separate database per test class, and removes it afterwards. They use xUnit v3 on
-  Microsoft.Testing.Platform (enabled in [global.json](global.json)).
+- **Tests** are mostly integration tests: they host the real app in memory and send requests like a
+  browser, against real PostgreSQL. Testcontainers starts a throw-away PostgreSQL container for the run,
+  with a separate database per test class, and removes it afterwards. The cover sources are tested with
+  recorded answers of their APIs and a fake source, so the tests never reach the internet and need no
+  credentials. They use xUnit v3 on Microsoft.Testing.Platform (enabled in [global.json](global.json)).
 - **Code quality**: the build treats warnings as errors and runs the .NET code analyzers
   (`latest-recommended`), [Meziantou.Analyzer](https://github.com/meziantou/Meziantou.Analyzer)
   (async code, string comparisons, collections), [SonarAnalyzer](https://rules.sonarsource.com/csharp/)
@@ -318,7 +333,7 @@ dotnet dotnet-ef migrations add <Name> --project ManageGames   # after changing 
 | `ManageGames/Migrations` | The database schema and the console catalog |
 | `ManageGames/ViewModels`, `ManageGames/Views` | Forms with their validation rules, and the Razor pages |
 | `ManageGames/wwwroot` | CSS, JavaScript and Bootstrap |
-| `ManageGames.Tests` | Integration tests; `Infrastructure` holds the test host, the test databases and browser helpers |
+| `ManageGames.Tests` | Integration and unit tests; `Infrastructure` holds the test host, the test databases, browser helpers and a fake cover source |
 | `compose.yaml` | The local PostgreSQL for development |
 | `docs` | Landing page, published with GitHub Pages |
 

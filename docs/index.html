@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ManageGames — game collection manager</title>
-<meta name="description" content="ManageGames — a self-hosted ASP.NET Core app to organize your video game collection: games, consoles, companies and a wishlist, each behind your own account. Starts with a catalog of 63 consoles.">
+<meta name="description" content="ManageGames — a self-hosted ASP.NET Core app to organize your video game collection: games with their cover pictures, consoles, companies and a wishlist, each behind your own account. Covers come from ScreenScraper, IGDB and SteamGridDB.">
 <style>
   :root {
     --bg: #f7f8fa;
@@ -109,6 +109,11 @@
   .note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 18px; }
   .note + .note { margin-top: 6px; }
   .note code { font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+  .run.wide { max-width: 900px; }
+  .steps { margin-bottom: 28px; }
+  .card .key { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .card .key code { font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 12.5px; color: var(--text); overflow-wrap: anywhere; }
+  .card .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
 
   footer { border-top: 1px solid var(--border); padding: 32px 0 48px; text-align: center; color: var(--muted); font-size: 14px; }
   footer a { color: var(--muted); }
@@ -119,11 +124,12 @@
     <div class="wrap">
       <span class="badge-top">ASP.NET Core · .NET 10</span>
       <h1>ManageGames</h1>
-      <p class="lead">A self-hosted web app to keep your video-game collection organized — games, consoles, makers and a wishlist, each behind your own account.</p>
+      <p class="lead">A self-hosted web app to keep your video-game collection organized — games with their box art, consoles, makers and a wishlist, each behind your own account.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/Saiyuki47/ManageGames">★ View on GitHub</a>
         <a class="btn btn-ghost" href="#requirements">Requirements</a>
         <a class="btn btn-ghost" href="#run">Run it locally</a>
+        <a class="btn btn-ghost" href="#covers">Set up covers</a>
       </div>
     </div>
   </header>
@@ -134,6 +140,9 @@
       <p class="section-sub">A small, focused collection manager — no clutter, just your library.</p>
       <div class="grid">
         <div class="card"><div class="ico">🎮</div><h3>Your game library</h3><p>Add, edit and remove games, track how many copies you own, and search your collection — ignoring case and spaces.</p></div>
+        <div class="card"><div class="ico">🖼️</div><h3>Covers found for you</h3><p>Adding a game looks up its box art at ScreenScraper, IGDB and SteamGridDB. Only a cover whose title clearly matches and that is for the game's console is taken — a wrong cover is worse than none.</p></div>
+        <div class="card"><div class="ico">🌍</div><h3>Your region's box</h3><p>German and European boxes are preferred, and German titles are found. Already found covers can be swapped for regional ones later with one command.</p></div>
+        <div class="card"><div class="ico">🗂️</div><h3>Pick or upload</h3><p>Not happy with a cover? Choose from the results of all sources, search with another title, or upload your own picture. Small thumbnails keep the lists fast.</p></div>
         <div class="card"><div class="ico">⭐</div><h3>Wishlist</h3><p>Flag the games you still want and keep them on a separate wishlist.</p></div>
         <div class="card"><div class="ico">🕹️</div><h3>Ready-made console catalog</h3><p>Starts with 63 consoles of 23 makers, from the Magnavox Odyssey to the Nintendo Switch 2, each linked to its maker. Admins can extend and change it.</p></div>
         <div class="card"><div class="ico">👥</div><h3>Several users</h3><p>One installation for family or friends: everybody logs in and sees only their own collection. Admins manage the accounts and the shared catalog.</p></div>
@@ -155,6 +164,8 @@
         <span class="tech">ASP.NET Core Identity</span>
         <span class="tech">Docker Compose</span>
         <span class="tech">Bootstrap 5.3</span>
+        <span class="tech">SkiaSharp</span>
+        <span class="tech">ScreenScraper · IGDB · SteamGridDB</span>
         <span class="tech">xUnit v3 + Testcontainers</span>
       </div>
     </div>
@@ -173,6 +184,7 @@
             <li><strong>Git</strong> to get the code</li>
             <li>Free ports <strong>5433</strong> (database) and <strong>7200</strong> (app)</li>
             <li>A current browser: Chrome, Edge, Firefox or Safari</li>
+            <li>Optional, for covers: free credentials of at least one <a href="#covers">cover source</a></li>
           </ul>
         </div>
         <div class="card">
@@ -182,6 +194,7 @@
             <li><strong>PostgreSQL</strong> (tested with version 18), on your own server or as a managed service; the app creates its tables itself</li>
             <li><strong>HTTPS</strong>: a domain with a certificate and a reverse proxy such as Caddy or nginx</li>
             <li>Regular <strong>backups</strong> of the database</li>
+            <li>For covers: outgoing <strong>HTTPS</strong> to the cover sources, credentials as environment variables</li>
           </ul>
         </div>
       </div>
@@ -205,6 +218,57 @@
 <span class="c"># console, and you choose your own password at the first login</span></pre>
       </div>
       <p class="note">Forgot your password? <code>dotnet run --project ManageGames -- reset-password &lt;username&gt;</code></p>
+      <p class="note">Covers need a little setup first: see <a href="#covers">Cover sources</a>.</p>
+    </div>
+  </section>
+
+  <section id="covers">
+    <div class="wrap">
+      <h2>Cover sources</h2>
+      <p class="section-sub">Covers are looked up in this order. Each source is free for non-commercial use; one is enough, and sources without credentials are skipped.</p>
+      <div class="grid steps">
+        <div class="card">
+          <span class="tag">1st · real box scans per region</span>
+          <h3>ScreenScraper</h3>
+          <p>Register at <a href="https://www.screenscraper.fr">screenscraper.fr</a> and ask for developer credentials (devid and devpassword) in its forum. Your normal login alone isn't enough — apps like ES-DE only ask for it because they ship their own developer credentials. Adding your login too raises the daily limit.</p>
+          <span class="key"><code>DevId</code> · <code>DevPassword</code> · optional <code>Username</code>, <code>Password</code></span>
+        </div>
+        <div class="card">
+          <span class="tag">2nd · knows each game's platforms</span>
+          <h3>IGDB</h3>
+          <p>Log in to the <a href="https://dev.twitch.tv/console">Twitch developer console</a> (with two-factor authentication), register an application with the OAuth redirect URL <code>http://localhost</code> and the client type <em>Confidential</em>, then create a client secret.</p>
+          <span class="key"><code>ClientId</code> · <code>ClientSecret</code></span>
+        </div>
+        <div class="card">
+          <span class="tag">3rd · community-made covers</span>
+          <h3>SteamGridDB</h3>
+          <p>Log in at <a href="https://www.steamgriddb.com">steamgriddb.com</a> and create an API key under <a href="https://www.steamgriddb.com/profile/preferences/api">Preferences → API</a>.</p>
+          <span class="key"><code>ApiKey</code></span>
+        </div>
+      </div>
+      <div class="run wide">
+<pre><span class="c"># store the credentials as user secrets, outside the repository</span>
+<span class="c"># (one line per value; leave out the sources you don't use)</span>
+<span class="p">dotnet</span> user-secrets set "Covers:ScreenScraper:DevId" "&lt;devid&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:ScreenScraper:DevPassword" "&lt;devpassword&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:ScreenScraper:Username" "&lt;your login&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:ScreenScraper:Password" "&lt;your password&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:Igdb:ClientId" "&lt;client id&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:Igdb:ClientSecret" "&lt;client secret&gt;" --project ManageGames
+<span class="p">dotnet</span> user-secrets set "Covers:SteamGridDb:ApiKey" "&lt;api key&gt;" --project ManageGames
+
+<span class="c"># check what is stored (prints the values, too)</span>
+<span class="p">dotnet</span> user-secrets list --project ManageGames
+
+<span class="c"># covers for all games that have none yet, e.g. added before the setup</span>
+<span class="p">dotnet</span> run --project ManageGames -- scrape-covers [username]
+
+<span class="c"># later: swap automatically found covers for German/European boxes;</span>
+<span class="c"># covers you chose or uploaded are never replaced</span>
+<span class="p">dotnet</span> run --project ManageGames -- scrape-covers --refresh [username]</pre>
+      </div>
+      <p class="note">Restart the app after adding credentials. On a server, use environment variables instead, e.g. <code>Covers__Igdb__ClientSecret</code>.</p>
+      <p class="note">Preferred regions: <code>Covers:Regions</code> (default <code>de,eu</code>). All settings are in the <a href="https://github.com/Saiyuki47/ManageGames#configuration">README</a>.</p>
     </div>
   </section>
 
